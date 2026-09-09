@@ -1,0 +1,19 @@
+[package]
+name = "herdr-tagr"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Concise, icon-first tab titles for herdr: app icon + git branch + folder"
+license = "MIT"
+repository = "https://github.com/dvoets/herdr-tagr"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

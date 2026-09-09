@@ -1,0 +1,34 @@
+id = "herdr-tagr"
+name = "Tagr"
+version = "0.1.0"
+min_herdr_version = "0.7.5"
+description = "Concise, icon-first tab titles: app icon + git branch + folder."
+platforms = ["linux", "macos"]
+
+# Built once at install time. Produces ./target/release/herdr-tagr.
+[[build]]
+command = ["cargo", "build", "--release"]
+
+# Long-lived daemon: subscribes to the herdr event stream and retitles tabs.
+[[startup]]
+command = ["./target/release/herdr-tagr", "daemon"]
+
+[[actions]]
+id = "refresh"
+title = "Tagr: refresh all tab titles"
+command = ["./target/release/herdr-tagr", "refresh"]
+
+[[actions]]
+id = "adopt"
+title = "Tagr: auto-title this tab"
+command = ["./target/release/herdr-tagr", "adopt"]
+
+[[actions]]
+id = "release"
+title = "Tagr: stop auto-titling this tab"
+command = ["./target/release/herdr-tagr", "release"]
+
+[[actions]]
+id = "doctor"
+title = "Tagr: explain this pane's title"
+command = ["./target/release/herdr-tagr", "doctor"]

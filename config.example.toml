@@ -1,0 +1,87 @@
+# herdr-tagr configuration.
+#
+# Copy to the plugin's config directory and edit:
+#   cp config.example.toml "$(herdr plugin config-dir herdr-tagr)/config.toml"
+#
+# Every value below is a default - a missing file, or a file with only the keys
+# you care about, works fine. The daemon picks up edits without a restart.
+
+[general]
+# Coalescing window after a burst of herdr events before recomputing.
+debounce_ms = 120
+# Floor between two full passes, so a chatty agent cannot spin the daemon.
+min_interval_ms = 250
+# How long a pane's process listing stays usable before it is re-read.
+process_ttl_ms = 1500
+# Fallback polling when the event stream is unavailable. 0 disables it.
+poll_ms = 0
+# Log every rename to the plugin log (herdr plugin log list --plugin herdr-tagr).
+debug = false
+
+[label]
+show_icon = true
+show_git = true
+show_folder = true
+separator = " "
+# Hard cap on the rendered label, in characters.
+max_length = 32
+home_symbol = "~"
+ellipsis = "…"
+
+[git]
+# Longer branch names are truncated to this many characters.
+branch_max = 12
+# What to show when you are on the repository's default branch:
+#   "repo_glyph"    (default)  folder      - marks a repo, no branch name
+#   "branch_glyph"             folder
+#   "nothing"                 folder        - no git marker at all
+#   "name"                     main folder  - spell the branch out
+default_branch_style = "repo_glyph"
+# Always treated as default branches, in addition to whatever origin/HEAD says.
+default_branches = ["main", "master", "trunk"]
+repo_glyph = ""       # nf-oct-repo
+branch_glyph = ""     # nf-dev-git_branch
+detached_glyph = ""   # nf-oct-git_commit
+detached_len = 7
+
+[ssh]
+enabled = true
+# Recover the remote directory from the title the remote shell sets.
+# Falls back to showing the host alone when the title is not a path.
+remote_folder_from_title = true
+separator = ":"
+
+[adoption]
+# Which tabs this plugin is allowed to title:
+#   "generated_only" (default) only labels that still look herdr-generated
+#                              (a number, an agent name, the folder name).
+#                              Names you typed are never touched.
+#   "always"                   every tab, backing off permanently once you
+#                              rename one by hand. Pair with
+#                              prompt_new_tab_name = false in herdr's config.
+#   "opt_in"                   nothing, until a tab is handed over with the
+#                              "Tagr: auto-title this tab" action.
+mode = "generated_only"
+# Extra labels to treat as herdr-generated, beyond the built-in list.
+generated_names = []
+
+# Per-app overrides, merged over the built-in table by id. Higher rank wins when
+# several known apps share a pane, which is how "claude running nvim" resolves.
+#
+# Built-in ranks: ssh 90 - editors 76-80 - yazi 75 - lazygit/lazydocker 70 -
+# k9s 68 - btop 66 - ncdu 65 - agents 60 - pagers 48-50 - tmux 45 -
+# dev tooling 20-30 - shell 10.
+
+# [apps.claude]
+# icon = ""
+# rank = 85          # let claude outrank an editor it launched
+
+# [apps.nvim]
+# icon = ""
+# matches = ["nvim", "neovim", "lvim"]
+
+# A new app the plugin does not ship. The id doubles as the process name
+# unless you give an explicit `matches` list.
+# [apps.psql]
+# icon = ""
+# rank = 55
