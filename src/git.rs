@@ -116,7 +116,8 @@ impl Cache {
             }
             cur = d.parent();
         }
-        self.roots.insert(dir.to_path_buf(), (found.clone(), Instant::now()));
+        self.roots
+            .insert(dir.to_path_buf(), (found.clone(), Instant::now()));
         found
     }
 }
@@ -214,6 +215,7 @@ fn config_value(text: &str, section: &str, key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Git;
 
     #[test]
     fn parses_a_branch_head() {
@@ -229,8 +231,14 @@ mod tests {
 
     #[test]
     fn a_directory_that_becomes_a_repo_is_noticed() {
-        let mut cfg = Config::default();
-        cfg.git.recheck_non_repo_ms = 0; // re-check immediately
+        // Re-check immediately, so the test does not sleep.
+        let cfg = Config {
+            git: Git {
+                recheck_non_repo_ms: 0,
+                ..Git::default()
+            },
+            ..Config::default()
+        };
         let dir = std::env::temp_dir().join(format!("tagr-init-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut cache = Cache::default();
@@ -239,7 +247,10 @@ mod tests {
         // `git init` lands.
         std::fs::create_dir_all(dir.join(".git")).unwrap();
         std::fs::write(dir.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
-        assert!(cache.repo(&dir, &cfg).is_some(), "negative cache must expire");
+        assert!(
+            cache.repo(&dir, &cfg).is_some(),
+            "negative cache must expire"
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }
