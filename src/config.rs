@@ -64,6 +64,24 @@ pub struct Git {
     /// How long a directory stays remembered as "not a repository", so a
     /// `git init` or a finished clone is picked up without a restart.
     pub recheck_non_repo_ms: u64,
+    /// Where a *named* git segment sits relative to the folder. A glyph-only
+    /// segment (the default-branch marker) always leads, since there is no
+    /// name to set apart.
+    pub position: GitPosition,
+    /// Brackets around a named git segment. `["", ""]` removes them.
+    ///
+    /// herdr paints a tab label with a single style and never parses it, so
+    /// colour cannot separate branch from folder - punctuation has to.
+    pub wrap: [String; 2],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GitPosition {
+    /// `api (\u{e725} feat/auth)`
+    AfterFolder,
+    /// `(\u{e725} feat/auth) api`
+    BeforeFolder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -157,6 +175,8 @@ impl Default for Git {
             detached_glyph: "\u{f417}".to_string(),
             detached_len: 7,
             recheck_non_repo_ms: 10_000,
+            position: GitPosition::AfterFolder,
+            wrap: ["(".to_string(), ")".to_string()],
         }
     }
 }

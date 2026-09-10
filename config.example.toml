@@ -5,6 +5,9 @@
 #
 # Every value below is a default - a missing file, or a file with only the keys
 # you care about, works fine. The daemon picks up edits without a restart.
+#
+# Glyphs are written as \uXXXX escapes rather than literal characters so this
+# file stays plain ASCII and cannot be mangled in transit. TOML decodes them.
 
 [general]
 # Coalescing window after a burst of herdr events before recomputing.
@@ -15,7 +18,7 @@ min_interval_ms = 250
 process_ttl_ms = 1500
 # Fallback polling when the event stream is unavailable. 0 disables it.
 poll_ms = 0
-# Log every rename to the plugin log (herdr plugin log list --plugin herdr-tagr).
+# Log every rename (herdr plugin log list --plugin herdr-tagr).
 debug = false
 
 [label]
@@ -26,23 +29,41 @@ separator = " "
 # Hard cap on the rendered label, in characters.
 max_length = 32
 home_symbol = "~"
-ellipsis = "…"
+ellipsis = "\u2026"
 
 [git]
 # Longer branch names are truncated to this many characters.
 branch_max = 12
-# What to show when you are on the repository's default branch:
-#   "repo_glyph"    (default)  folder      - marks a repo, no branch name
-#   "branch_glyph"             folder
-#   "nothing"                 folder        - no git marker at all
-#   "name"                     main folder  - spell the branch out
+
+# herdr paints a tab label with a single style and never parses it, so colour
+# cannot separate the branch from the folder. Brackets do that job instead -
+# the same trick a shell prompt uses for its git fragment.
+#
+#   after_folder    api (\ue725 feat/auth)
+#   before_folder   (\ue725 feat/auth) api
+position = "after_folder"
+# Brackets around a named git segment. Use ["", ""] for none.
+wrap = ["(", ")"]
+
+# What to show when you are on the repository's default branch. A glyph-only
+# marker always leads and is never bracketed, since there is no name to set
+# apart from the folder.
+#   "repo_glyph"    (default)  \uf401 folder
+#   "branch_glyph"             \ue725 folder
+#   "nothing"                  folder          - no git marker at all
+#   "name"                     folder (\ue725 main)
 default_branch_style = "repo_glyph"
 # Always treated as default branches, in addition to whatever origin/HEAD says.
 default_branches = ["main", "master", "trunk"]
-repo_glyph = ""       # nf-oct-repo
-branch_glyph = ""     # nf-dev-git_branch
-detached_glyph = ""   # nf-oct-git_commit
+
+repo_glyph = "\uf401"      # nf-oct-repo
+branch_glyph = "\ue725"    # nf-dev-git_branch
+detached_glyph = "\uf417"  # nf-oct-git_commit
 detached_len = 7
+
+# How long a directory stays remembered as "not a repository", so a git init or
+# a finished clone is picked up without restarting the daemon.
+recheck_non_repo_ms = 10000
 
 [ssh]
 enabled = true
@@ -73,15 +94,15 @@ generated_names = []
 # dev tooling 20-30 - shell 10.
 
 # [apps.claude]
-# icon = ""
-# rank = 85          # let claude outrank an editor it launched
+# icon = "\uf069"
+# rank = 85            # let claude outrank an editor it launched
 
 # [apps.nvim]
-# icon = ""
+# icon = "\ue6ae"
 # matches = ["nvim", "neovim", "lvim"]
 
 # A new app the plugin does not ship. The id doubles as the process name
 # unless you give an explicit `matches` list.
 # [apps.psql]
-# icon = ""
+# icon = "\ue76e"
 # rank = 55

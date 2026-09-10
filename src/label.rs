@@ -1,15 +1,20 @@
 //! Renders the tab label.
 //!
 //! Shapes (defaults):
-//!   on default branch      icon  folder
-//!   on another branch      icon  branch folder
-//!   detached HEAD          icon  a1b2c3d folder
+//!   on default branch      icon \u{f401} folder
+//!   on another branch      icon folder (\u{e725} branch)
+//!   detached HEAD          icon folder (\u{f417} a1b2c3d)
 //!   not a repository       icon folder
 //!   ssh                    icon host:folder
+//!
+//! herdr paints a tab label with a single style and never parses it for escape
+//! sequences (`src/client/shell/tabs.rs`), so colour is not available to
+//! separate the branch from the folder. Brackets do that job instead, which is
+//! also how a shell prompt marks the git fragment.
 
 use std::path::Path;
 
-use crate::config::{Config, DefaultBranchStyle};
+use crate::config::{Config, DefaultBranchStyle, GitPosition};
 use crate::detect::Detected;
 use crate::git::{Cache, Head};
 use crate::icons::Kind;
@@ -41,40 +46,107 @@ pub fn render(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> String {
         .filter(|_| cfg.label.show_git)
         .and_then(|c| git.repo(Path::new(c), cfg));
 
-    if let Some(repo) = &repo {
-        match (&repo.head, repo.on_default_branch(cfg)) {
-            (_, true) => match cfg.git.default_branch_style {
-                DefaultBranchStyle::RepoGlyph => parts.push(cfg.git.repo_glyph.clone()),
-                DefaultBranchStyle::BranchGlyph => parts.push(cfg.git.branch_glyph.clone()),
-                DefaultBranchStyle::Nothing => {}
-                DefaultBranchStyle::Name => {
-                    if let Head::Branch(b) = &repo.head {
-                        parts.push(cfg.git.branch_glyph.clone());
-                        parts.push(truncate(b, cfg.git.branch_max, &cfg.label.ellipsis));
-                    }
-                }
-            },
-            (Head::Branch(b), false) => {
-                parts.push(cfg.git.branch_glyph.clone());
-                parts.push(truncate(b, cfg.git.branch_max, &cfg.label.ellipsis));
-            }
-            (Head::Detached(sha), false) => {
-                parts.push(cfg.git.detached_glyph.clone());
-                let short: String = sha.chars().take(cfg.git.detached_len.max(4)).collect();
-                parts.push(short);
-            }
+    // A glyph-only segment marks "this is a repo" and leads; a named segment
+    // carries a branch or commit and is bracketed so it cannot be read as part
+    // of the folder name.
+    let (mut leading, named) = match &repo {
+        None => (None, None),
+        Some(repo) => git_segments(repo, cfg),
+    };
+
+    let folder = if cfg.label.show_folder {
+        ctx.cwd
+            .map(|c| folder_name(c, cfg))
+            .filter(|f| !f.is_empty())
+    } else {
+        None
+    };
+
+    // With no folder to sit beside, a bracketed segment has nothing to be set
+    // apart from, so it stands alone unwrapped.
+    if folder.is_none() {
+        if let Some((glyph, name)) = &named {
+            leading = Some(join_glyph(glyph, name));
         }
     }
 
-    if cfg.label.show_folder {
-        if let Some(folder) = ctx.cwd.map(|c| folder_name(c, cfg)) {
-            if !folder.is_empty() {
-                parts.push(folder);
+    if let Some(glyph) = leading {
+        parts.push(glyph);
+    }
+    match (&named, folder) {
+        (Some((glyph, name)), Some(folder)) => {
+            let wrapped = format!(
+                "{}{}{}",
+                cfg.git.wrap[0],
+                join_glyph(glyph, name),
+                cfg.git.wrap[1]
+            );
+            match cfg.git.position {
+                GitPosition::AfterFolder => {
+                    parts.push(folder);
+                    parts.push(wrapped);
+                }
+                GitPosition::BeforeFolder => {
+                    parts.push(wrapped);
+                    parts.push(folder);
+                }
             }
         }
+        (_, Some(folder)) => parts.push(folder),
+        (_, None) => {}
     }
 
     finish(parts, cfg)
+}
+
+/// Splits a repository into its glyph-only marker and its named part.
+///
+/// Exactly one of the two is produced: a repository is either sitting on its
+/// default branch (nothing worth naming) or somewhere worth naming.
+type GitSegments = (Option<String>, Option<(String, String)>);
+
+fn git_segments(repo: &crate::git::Repo, cfg: &Config) -> GitSegments {
+    if repo.on_default_branch(cfg) {
+        return match cfg.git.default_branch_style {
+            DefaultBranchStyle::RepoGlyph => (Some(cfg.git.repo_glyph.clone()), None),
+            DefaultBranchStyle::BranchGlyph => (Some(cfg.git.branch_glyph.clone()), None),
+            DefaultBranchStyle::Nothing => (None, None),
+            DefaultBranchStyle::Name => match &repo.head {
+                Head::Branch(b) => (
+                    None,
+                    Some((
+                        cfg.git.branch_glyph.clone(),
+                        truncate(b, cfg.git.branch_max, &cfg.label.ellipsis),
+                    )),
+                ),
+                Head::Detached(_) => (Some(cfg.git.repo_glyph.clone()), None),
+            },
+        };
+    }
+    match &repo.head {
+        Head::Branch(b) => (
+            None,
+            Some((
+                cfg.git.branch_glyph.clone(),
+                truncate(b, cfg.git.branch_max, &cfg.label.ellipsis),
+            )),
+        ),
+        Head::Detached(sha) => (
+            None,
+            Some((
+                cfg.git.detached_glyph.clone(),
+                sha.chars().take(cfg.git.detached_len.max(4)).collect(),
+            )),
+        ),
+    }
+}
+
+fn join_glyph(glyph: &str, name: &str) -> String {
+    if glyph.is_empty() {
+        name.to_string()
+    } else {
+        format!("{glyph} {name}")
+    }
 }
 
 fn ssh_segment(host: &str, ctx: &Context<'_>, cfg: &Config) -> String {
@@ -129,7 +201,9 @@ pub fn folder_name(path: &str, cfg: &Config) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
-fn finish(parts: Vec<String>, cfg: &Config) -> String {
+fn finish(mut parts: Vec<String>, cfg: &Config) -> String {
+    // A glyph configured as "" must vanish, not leave a doubled separator.
+    parts.retain(|p| !p.is_empty());
     let joined = parts.join(&cfg.label.separator);
     truncate(&joined, cfg.label.max_length, &cfg.label.ellipsis)
 }
@@ -220,6 +294,99 @@ mod tests {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
         assert_eq!(folder_name(&home, &cfg), "~");
         assert_eq!(folder_name("~", &cfg), "~");
+    }
+
+    fn repo(head: Head, default_branch: &str) -> crate::git::Repo {
+        crate::git::Repo {
+            root: std::path::PathBuf::from("/r"),
+            head,
+            default_branch: Some(default_branch.to_string()),
+        }
+    }
+
+    /// Renders straight from a repository, skipping the filesystem.
+    fn label_with(repo: &crate::git::Repo, folder: &str, cfg: &Config) -> String {
+        let (leading, named) = git_segments(repo, cfg);
+        let mut parts = vec!["I".to_string()];
+        if let Some(g) = leading {
+            parts.push(g);
+        }
+        if let Some((glyph, name)) = named {
+            let wrapped = format!(
+                "{}{}{}",
+                cfg.git.wrap[0],
+                join_glyph(&glyph, &name),
+                cfg.git.wrap[1]
+            );
+            match cfg.git.position {
+                GitPosition::AfterFolder => {
+                    parts.push(folder.to_string());
+                    parts.push(wrapped);
+                }
+                GitPosition::BeforeFolder => {
+                    parts.push(wrapped);
+                    parts.push(folder.to_string());
+                }
+            }
+        } else {
+            parts.push(folder.to_string());
+        }
+        finish(parts, cfg)
+    }
+
+    #[test]
+    fn a_named_branch_is_bracketed_after_the_folder() {
+        let cfg = Config::default();
+        let r = repo(Head::Branch("feat/auth".into()), "main");
+        assert_eq!(label_with(&r, "api", &cfg), "I api (\u{e725} feat/auth)");
+    }
+
+    #[test]
+    fn the_default_branch_marker_leads_and_is_not_bracketed() {
+        let cfg = Config::default();
+        let r = repo(Head::Branch("main".into()), "main");
+        assert_eq!(label_with(&r, "herdr-tagr", &cfg), "I \u{f401} herdr-tagr");
+    }
+
+    #[test]
+    fn a_detached_head_is_bracketed_like_a_branch() {
+        let cfg = Config::default();
+        let r = repo(Head::Detached("a1b2c3d4e5f6".into()), "main");
+        assert_eq!(label_with(&r, "api", &cfg), "I api (\u{f417} a1b2c3d)");
+    }
+
+    #[test]
+    fn position_and_wrap_are_configurable() {
+        let cfg = Config {
+            git: crate::config::Git {
+                position: GitPosition::BeforeFolder,
+                wrap: [String::new(), String::new()],
+                ..crate::config::Git::default()
+            },
+            ..Config::default()
+        };
+        let r = repo(Head::Branch("feat/auth".into()), "main");
+        assert_eq!(label_with(&r, "api", &cfg), "I \u{e725} feat/auth api");
+    }
+
+    #[test]
+    fn an_empty_glyph_does_not_leave_a_doubled_separator() {
+        let cfg = Config {
+            git: crate::config::Git {
+                repo_glyph: String::new(),
+                branch_glyph: String::new(),
+                ..crate::config::Git::default()
+            },
+            ..Config::default()
+        };
+        let mut git = Cache::default();
+        let d = Detected {
+            app: app("shell", "S", Kind::Shell),
+            ssh_host: None,
+        };
+        let out = render(&ctx(&d, Some("/tmp"), None), &cfg, &mut git);
+        assert_eq!(out, "S tmp", "empty parts must be dropped, not joined");
+        assert!(!out.contains("  "));
     }
 
     #[test]

@@ -3,20 +3,23 @@
 Concise, icon-first tab titles for [herdr](https://herdr.dev).
 
 ```
-  ~                     plain shell in $HOME
-  herdr-tagr            claude, repo, on the default branch
-  feat/auth api         nvim, in api/, on a feature branch
-  assets                yazi, repo on default branch
-  apollo:media          ssh, remote directory from the remote's title
-  Downloads             shell, not a repository
+ ~                      plain shell in $HOME
+  herdr-tagr           claude, repo, on the default branch
+ api ( feat/auth)      nvim, in api/, on a feature branch
+  assets               yazi, repo on its default branch
+ apollo:media           ssh, remote directory from the remote's title
+ Downloads              shell, not a repository
 ```
 
-Two ideas do the work:
+Three ideas do the work:
 
 1. **An icon instead of a name.** The pane's foreground process tells us what is
    actually running, so the app costs two columns rather than a word.
 2. **Branch and folder, nothing else.** No path, no agent chatter - the parts
    that change when you actually move somewhere.
+3. **Brackets, because colour is unavailable.** herdr paints a tab label with a
+   single style and never parses it, so the git fragment is set apart the way a
+   shell prompt does it: `api ( feat/auth)`.
 
 ## Install
 
@@ -41,14 +44,18 @@ herdr plugin unlink herdr-tagr
 
 | Situation | Label | Why |
 |---|---|---|
-| Default branch (`main`/`master`/`trunk`, or whatever `origin/HEAD` names) | ` herdr-tagr` | The repo glyph says "git repo, on trunk" in two columns instead of spelling out `main` on every tab |
-| Any other branch | ` feat/auth api` | The branch is the thing that changed, so it gets named |
-| Detached HEAD | ` a1b2c3d api` | |
+| Default branch (`main`/`master`/`trunk`, or whatever `origin/HEAD` names) | ` herdr-tagr` | The repo glyph says "git repo, on trunk" in two columns instead of spelling out `main` on every tab. Nothing to name, so it leads and is not bracketed |
+| Any other branch | `api ( feat/auth)` | The branch is what changed, so it gets named - and bracketed, so it cannot be read as part of the folder |
+| Detached HEAD | `api ( a1b2c3d)` | |
 | Not a repository | `Downloads` | No git marker at all, so a repo is distinguishable from a plain folder at a glance |
-| SSH | ` apollo:media` | The host you are on matters more than the directory you launched from; the remote folder is recovered from the title the remote shell sets, and dropped when there isn't one |
+| SSH | `apollo:media` | The host you are on matters more than the directory you launched from; the remote folder is recovered from the title the remote shell sets, and dropped when there isn't one |
 
-Only the **current folder** is shown, never the path to it. Long branch names
-truncate at 12 characters, the whole label at 32.
+Only the **current folder** is shown, never the path to it. The folder comes
+first, so it survives when a narrow tab truncates. Long branch names truncate at
+12 characters, the whole label at 32.
+
+Put the git fragment first with `position = "before_folder"`, or drop the
+brackets with `wrap = ["", ""]`.
 
 ## Which icon wins
 
@@ -61,12 +68,12 @@ foreground process tree wins. Unrecognised processes have no rank and can never
 win, so helper children stay invisible.
 
 ```
-zsh                      →   shell
-zsh > claude             →   claude
-zsh > claude > (mcp)     →   claude       helpers are unranked
-zsh > nvim               →   nvim
-zsh > claude > nvim      →   nvim         80 > 60
-zsh > ssh > nvim         →   ssh          90 > 80
+zsh                      ->  shell
+zsh > claude             ->  claude
+zsh > claude > (mcp)     ->  claude       helpers are unranked
+zsh > nvim               ->  nvim
+zsh > claude > nvim      ->  nvim         80 > 60
+zsh > ssh > nvim         ->  ssh          90 > 80
 ```
 
 Ties break towards the process owning the terminal's foreground process group,
@@ -120,11 +127,11 @@ own - no restart needed.
 ## How it works
 
 ```
-herdr socket ──events.subscribe──► reader thread ──flag──► debounce ──► pass
-                                                                         │
-                        session.snapshot ◄───────────────────────────────┤
-                        pane.process_info ◄──────────────────────────────┤
-                        tab.rename ◄─────────────────────────────────────┘
+herdr socket --events.subscribe--> reader thread --flag--> debounce --> pass
+                                                                        |
+                       session.snapshot <-----------------------------  |
+                       pane.process_info <----------------------------  |
+                       tab.rename <-----------------------------------  |
 ```
 
 One long-lived connection streams events; each request gets its own connection,
