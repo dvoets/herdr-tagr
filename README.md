@@ -4,9 +4,9 @@ Concise, icon-first tab titles for [herdr](https://herdr.dev).
 
 ```
  ~                      plain shell in $HOME
-  herdr-tagr           claude, repo, on the default branch
+ herdr-tagr ( main)  claude, repo, on the default branch
  api ( feat/auth)      nvim, in api/, on a feature branch
-  assets               yazi, repo on its default branch
+ assets ( main)      yazi, repo on its default branch
  apollo:media           ssh, remote directory from the remote's title
  Downloads              shell, not a repository
 ```
@@ -44,8 +44,7 @@ herdr plugin unlink herdr-tagr
 
 | Situation | Label | Why |
 |---|---|---|
-| Default branch (`main`/`master`/`trunk`, or whatever `origin/HEAD` names) | ` herdr-tagr` | The repo glyph says "git repo, on trunk" in two columns instead of spelling out `main` on every tab. Nothing to name, so it leads and is not bracketed |
-| Any other branch | `api ( feat/auth)` | The branch is what changed, so it gets named - and bracketed, so it cannot be read as part of the folder |
+| Any branch, including the default | `api ( feat/auth)` | Bracketed, so the branch cannot be read as part of the folder. The default branch is named like any other, which keeps the git fragment in one fixed slot on every tab |
 | Detached HEAD | `api ( a1b2c3d)` | |
 | Not a repository | `Downloads` | No git marker at all, so a repo is distinguishable from a plain folder at a glance |
 | SSH | `apollo:media` | The host you are on matters more than the directory you launched from; the remote folder is recovered from the title the remote shell sets, and dropped when there isn't one |
@@ -56,6 +55,11 @@ first, so it survives when a narrow tab truncates. Long branch names truncate at
 
 Put the git fragment first with `position = "before_folder"`, or drop the
 brackets with `wrap = ["", ""]`.
+
+`default_branch_style` can shorten the default branch to a bare glyph
+(` herdr-tagr`) or drop it entirely. Both save a few columns, at the cost
+of the marker changing sides as you switch branches: a glyph-only marker leads,
+a named one trails.
 
 ## Which icon wins
 

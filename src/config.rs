@@ -84,6 +84,11 @@ pub enum GitPosition {
     BeforeFolder,
 }
 
+/// What to show when sitting on the repository's default branch.
+///
+/// Everything but `Name` shortens the label by dropping the branch name, at
+/// the cost of the git fragment changing shape - and, because a glyph-only
+/// marker leads while a named one trails, changing position too.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DefaultBranchStyle {
@@ -165,7 +170,7 @@ impl Default for Git {
     fn default() -> Self {
         Self {
             branch_max: 12,
-            default_branch_style: DefaultBranchStyle::RepoGlyph,
+            default_branch_style: DefaultBranchStyle::Name,
             default_branches: ["main", "master", "trunk"]
                 .iter()
                 .map(|s| s.to_string())

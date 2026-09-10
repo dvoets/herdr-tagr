@@ -45,14 +45,17 @@ position = "after_folder"
 # Brackets around a named git segment. Use ["", ""] for none.
 wrap = ["(", ")"]
 
-# What to show when you are on the repository's default branch. A glyph-only
-# marker always leads and is never bracketed, since there is no name to set
-# apart from the folder.
-#   "repo_glyph"    (default)  \uf401 folder
+# What to show when you are on the repository's default branch.
+#
+# The default names it like any other branch, so the git fragment keeps one
+# fixed slot on every tab. The shortening styles save a few columns, but a
+# glyph-only marker leads while a named one trails - so with those, the marker
+# changes sides depending on which branch you are on.
+#   "name"          (default)  folder (\ue725 main)
+#   "repo_glyph"               \uf401 folder
 #   "branch_glyph"             \ue725 folder
-#   "nothing"                  folder          - no git marker at all
-#   "name"                     folder (\ue725 main)
-default_branch_style = "repo_glyph"
+#   "nothing"                  folder           - no git marker at all
+default_branch_style = "name"
 # Always treated as default branches, in addition to whatever origin/HEAD says.
 default_branches = ["main", "master", "trunk"]
 

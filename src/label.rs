@@ -1,11 +1,15 @@
 //! Renders the tab label.
 //!
 //! Shapes (defaults):
-//!   on default branch      icon \u{f401} folder
-//!   on another branch      icon folder (\u{e725} branch)
+//!   any branch             icon folder (\u{e725} branch)
 //!   detached HEAD          icon folder (\u{f417} a1b2c3d)
 //!   not a repository       icon folder
 //!   ssh                    icon host:folder
+//!
+//! The git fragment keeps one fixed slot on every tab. Shortening it on the
+//! default branch is available (`default_branch_style`) but not the default,
+//! because a glyph-only marker leads while a named one trails - so the marker
+//! would change sides depending on which branch you are on.
 //!
 //! herdr paints a tab label with a single style and never parses it for escape
 //! sequences (`src/client/shell/tabs.rs`), so colour is not available to
@@ -101,42 +105,35 @@ pub fn render(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> String {
 
 /// Splits a repository into its glyph-only marker and its named part.
 ///
-/// Exactly one of the two is produced: a repository is either sitting on its
-/// default branch (nothing worth naming) or somewhere worth naming.
+/// At most one of the two is produced. By default it is always the named part;
+/// the glyph-only marker appears only when `default_branch_style` is set to
+/// shorten the default branch.
 type GitSegments = (Option<String>, Option<(String, String)>);
 
 fn git_segments(repo: &crate::git::Repo, cfg: &Config) -> GitSegments {
-    if repo.on_default_branch(cfg) {
-        return match cfg.git.default_branch_style {
-            DefaultBranchStyle::RepoGlyph => (Some(cfg.git.repo_glyph.clone()), None),
-            DefaultBranchStyle::BranchGlyph => (Some(cfg.git.branch_glyph.clone()), None),
-            DefaultBranchStyle::Nothing => (None, None),
-            DefaultBranchStyle::Name => match &repo.head {
-                Head::Branch(b) => (
-                    None,
-                    Some((
-                        cfg.git.branch_glyph.clone(),
-                        truncate(b, cfg.git.branch_max, &cfg.label.ellipsis),
-                    )),
-                ),
-                Head::Detached(_) => (Some(cfg.git.repo_glyph.clone()), None),
-            },
-        };
+    let named = |glyph: &str, text: String| (None, Some((glyph.to_string(), text)));
+
+    // `on_default_branch` is only ever true for a branch, so the shortening
+    // styles below cannot be reached with a detached HEAD.
+    if let (true, Head::Branch(_)) = (repo.on_default_branch(cfg), &repo.head) {
+        match cfg.git.default_branch_style {
+            DefaultBranchStyle::RepoGlyph => return (Some(cfg.git.repo_glyph.clone()), None),
+            DefaultBranchStyle::BranchGlyph => return (Some(cfg.git.branch_glyph.clone()), None),
+            DefaultBranchStyle::Nothing => return (None, None),
+            // Fall through: the default branch is named like any other, which
+            // keeps the git fragment in one fixed slot on every tab.
+            DefaultBranchStyle::Name => {}
+        }
     }
+
     match &repo.head {
-        Head::Branch(b) => (
-            None,
-            Some((
-                cfg.git.branch_glyph.clone(),
-                truncate(b, cfg.git.branch_max, &cfg.label.ellipsis),
-            )),
+        Head::Branch(b) => named(
+            &cfg.git.branch_glyph,
+            truncate(b, cfg.git.branch_max, &cfg.label.ellipsis),
         ),
-        Head::Detached(sha) => (
-            None,
-            Some((
-                cfg.git.detached_glyph.clone(),
-                sha.chars().take(cfg.git.detached_len.max(4)).collect(),
-            )),
+        Head::Detached(sha) => named(
+            &cfg.git.detached_glyph,
+            sha.chars().take(cfg.git.detached_len.max(4)).collect(),
         ),
     }
 }
@@ -342,8 +339,28 @@ mod tests {
     }
 
     #[test]
-    fn the_default_branch_marker_leads_and_is_not_bracketed() {
+    fn the_default_branch_is_named_like_any_other_by_default() {
         let cfg = Config::default();
+        let main = repo(Head::Branch("main".into()), "main");
+        let other = repo(Head::Branch("branch2".into()), "main");
+        // The git fragment must occupy the same slot in both, so the marker
+        // never changes sides as you switch branches.
+        assert_eq!(label_with(&main, "test", &cfg), "I test (\u{e725} main)");
+        assert_eq!(
+            label_with(&other, "test", &cfg),
+            "I test (\u{e725} branch2)"
+        );
+    }
+
+    #[test]
+    fn shortening_the_default_branch_is_opt_in() {
+        let cfg = Config {
+            git: crate::config::Git {
+                default_branch_style: DefaultBranchStyle::RepoGlyph,
+                ..crate::config::Git::default()
+            },
+            ..Config::default()
+        };
         let r = repo(Head::Branch("main".into()), "main");
         assert_eq!(label_with(&r, "herdr-tagr", &cfg), "I \u{f401} herdr-tagr");
     }
