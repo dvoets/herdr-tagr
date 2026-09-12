@@ -145,12 +145,27 @@ pub struct Sidebar {
     /// and colour them individually. Harmless when unused: herdr only renders
     /// tokens a sidebar layout actually asks for.
     pub report_tokens: bool,
+    /// Spaces prefixed to the `branch` token, to line it up under the row
+    /// above when the sidebar puts the branch on its own row.
+    ///
+    /// herdr has no literal-text token, so the padding has to come from the
+    /// value - and it is written with U+2800 rather than spaces, because herdr
+    /// trims whitespace off token values.
+    ///
+    /// Count the columns the earlier row spends before the token you
+    /// are aligning to: herdr separates sidebar tokens with `" \u{b7} "`, except
+    /// after a state icon, where it uses a single space. For
+    /// `["state_icon", "$icon", "$folder"]` that is 1 + 1 + 1 + 3 = 6, and the
+    /// branch token itself opens with a glyph and a space, so 4 lines the
+    /// branch name up under the folder.
+    pub branch_indent: usize,
 }
 
 impl Default for Sidebar {
     fn default() -> Self {
         Self {
             report_tokens: true,
+            branch_indent: 0,
         }
     }
 }

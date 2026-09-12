@@ -179,14 +179,21 @@ rows = [
 before                     after
 ----------------------     ----------------------
  herdr-tagr (...       herdr-tagr
-  claude                     main
+  claude                        main
 ```
 
 The branch gets the second row - the one herdr spent on a line reading
-`claude`, which the app icon already tells you. The workspace name repeated on
+`claude`, which the app icon already tells you - indented by `branch_indent` so
+it lines up under the folder rather than under the state icon. The workspace name repeated on
 every row goes too, and `$branch` is its own token rather than the tail of a
 string, so nothing truncates it away. `dim = false` lifts the rows off the
 panel background.
+
+`branch_indent` counts blank columns. herdr separates sidebar tokens with
+`" · "`, except after a state icon where it uses one space, so the row above
+spends 1 + 1 + 1 + 3 = 6 columns before the folder; the branch token opens with
+a glyph and a space, so 4 aligns them. The padding is U+2800 BRAILLE PATTERN
+BLANK rather than spaces, because herdr trims whitespace off token values.
 
 Add `"workspace"` back into the first row if you want the space name there too.
 Turn the whole thing off with `report_tokens = false`.

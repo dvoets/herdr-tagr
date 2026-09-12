@@ -179,6 +179,11 @@ pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
         .cwd
         .map(|c| folder_name(c, cfg))
         .filter(|f| !f.is_empty());
+    // U+2800 BRAILLE PATTERN BLANK, not a space: herdr trims whitespace off
+    // token values, and every actual space character is Unicode White_Space.
+    // The braille blank is punctuation as far as trimming is concerned and
+    // renders as one blank column.
+    let indent = "\u{2800}".repeat(cfg.sidebar.branch_indent);
     let branch = ctx
         .cwd
         .and_then(|c| git.repo(Path::new(c), cfg))
@@ -190,7 +195,8 @@ pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
                     .take(cfg.git.detached_len.max(4))
                     .collect::<String>(),
             ),
-        });
+        })
+        .map(|b| format!("{indent}{b}"));
 
     Tokens {
         icon,
@@ -437,6 +443,32 @@ mod tests {
         };
         let r = repo(Head::Branch("feat/auth".into()), "main");
         assert_eq!(label_with(&r, "api", &cfg), "I \u{e725} feat/auth api");
+    }
+
+    #[test]
+    fn the_branch_token_carries_its_indent() {
+        let cfg = Config {
+            sidebar: crate::config::Sidebar {
+                branch_indent: 4,
+                ..crate::config::Sidebar::default()
+            },
+            ..Config::default()
+        };
+        let mut git = Cache::default();
+        let d = Detected {
+            app: app("claude", "I", Kind::Normal),
+            ssh_host: None,
+        };
+        // The repo this test runs in, so the branch token is populated.
+        let cwd = env!("CARGO_MANIFEST_DIR");
+        let t = tokens(&ctx(&d, Some(cwd), None), &cfg, &mut git);
+        let branch = t.branch.expect("herdr-tagr is a git repository");
+        assert!(
+            branch.starts_with("\u{2800}\u{2800}\u{2800}\u{2800}"),
+            "got {branch:?}"
+        );
+        // Padding must survive herdr trimming whitespace off token values.
+        assert_eq!(branch.trim(), branch, "padding must not be whitespace");
     }
 
     #[test]
