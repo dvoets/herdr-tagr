@@ -114,9 +114,33 @@ Two escape hatches, both bindable as herdr actions:
 | `Tagr: auto-title this tab` | Hand a tab over, including one you named or previously renamed |
 | `Tagr: stop auto-titling this tab` | Take it back |
 
-Set `adoption.mode = "always"` to title every tab (worth pairing with
-`prompt_new_tab_name = false` in herdr's config), or `"opt_in"` to title nothing
-until you ask.
+Set `adoption.mode = "always"` to title every tab, or `"opt_in"` to title
+nothing until you ask.
+
+### Skipping the new-tab prompt entirely
+
+herdr can stop asking. In `~/.config/herdr/config.toml`:
+
+```toml
+[ui]
+prompt_new_tab_name = false
+```
+
+and in this plugin's `config.toml`:
+
+```toml
+[adoption]
+adopt_new_tabs = true
+```
+
+New tabs then open straight into the terminal, titled immediately, with no
+prompt in the way. With the prompt off nobody chose that name, so there is
+nothing to preserve - `adopt_new_tabs` titles every tab created while the daemon
+is watching, whatever herdr happened to call it, without touching the tabs that
+already existed.
+
+Renaming still wins. A tab you name by hand is left alone from then on,
+including one you handed over with the adopt action.
 
 ## Configuration
 

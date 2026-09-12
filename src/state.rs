@@ -100,17 +100,21 @@ impl State {
     /// May we write this tab's label? Pure: safe to call for a preview.
     ///
     /// `current` is the tab's label right now; `folder` is the pane's folder
-    /// name, because herdr also generates labels from the directory.
+    /// name, because herdr also generates labels from the directory. `is_new`
+    /// marks a tab that appeared after the daemon took its first look.
+    ///
+    /// A label we wrote is checked before any adoption rule, so renaming a tab
+    /// always wins - including one handed over with the `adopt` action. "I
+    /// typed this name" has to be the last word, or the escape hatch would be
+    /// a trap.
     pub fn decide(
         &self,
         tab_id: &str,
         current: &str,
         folder: Option<&str>,
         cfg: &Adoption,
+        is_new: bool,
     ) -> Decision {
-        if self.adopted.contains(tab_id) {
-            return Decision::Write;
-        }
         if self.excluded.contains(tab_id) {
             return Decision::Skip;
         }
@@ -121,6 +125,14 @@ impl State {
                 // Someone renamed a tab we owned. Back off for good.
                 Decision::UserRenamed
             };
+        }
+        if self.adopted.contains(tab_id) {
+            return Decision::Write;
+        }
+        // A tab created while we were watching has no name anyone chose - herdr
+        // only had to invent one because the new-tab prompt is off.
+        if is_new && cfg.adopt_new_tabs {
+            return Decision::Write;
         }
         let allowed = match cfg.mode {
             AdoptionMode::Always => true,
@@ -141,8 +153,9 @@ impl State {
         current: &str,
         folder: Option<&str>,
         cfg: &Adoption,
+        is_new: bool,
     ) -> bool {
-        match self.decide(tab_id, current, folder, cfg) {
+        match self.decide(tab_id, current, folder, cfg, is_new) {
             Decision::Write => true,
             Decision::Skip => false,
             Decision::UserRenamed => {
@@ -209,6 +222,7 @@ mod tests {
         Adoption {
             mode,
             generated_names: vec![],
+            adopt_new_tabs: false,
         }
     }
 
@@ -234,13 +248,13 @@ mod tests {
     fn a_rename_of_our_own_label_backs_us_off_permanently() {
         let mut s = State::default();
         let c = cfg(AdoptionMode::Always);
-        assert!(s.may_write("t1", "3", None, &c));
+        assert!(s.may_write("t1", "3", None, &c, false));
         s.record_written("t1", "\u{f120} ~");
-        assert!(s.may_write("t1", "\u{f120} ~", None, &c));
+        assert!(s.may_write("t1", "\u{f120} ~", None, &c, false));
         // User renames it.
-        assert!(!s.may_write("t1", "deploy", None, &c));
+        assert!(!s.may_write("t1", "deploy", None, &c, false));
         // ...and stays backed off even once the label drifts again.
-        assert!(!s.may_write("t1", "\u{f120} ~", None, &c));
+        assert!(!s.may_write("t1", "\u{f120} ~", None, &c, false));
         assert!(s.excluded.contains("t1"));
     }
 
@@ -249,9 +263,36 @@ mod tests {
         let mut s = State::default();
         let c = cfg(AdoptionMode::OptIn);
         s.exclude("t1");
-        assert!(!s.may_write("t1", "deploy", None, &c));
+        assert!(!s.may_write("t1", "deploy", None, &c, false));
         s.adopt("t1");
-        assert!(s.may_write("t1", "deploy", None, &c));
+        assert!(s.may_write("t1", "deploy", None, &c, false));
+    }
+
+    #[test]
+    fn a_rename_wins_over_an_explicit_adopt() {
+        let mut s = State::default();
+        let c = cfg(AdoptionMode::OptIn);
+        s.adopt("t1");
+        assert!(s.may_write("t1", "5", None, &c, false));
+        s.record_written("t1", "\u{f120} tmp");
+        // The user renames a tab they had handed over.
+        assert!(!s.may_write("t1", "deploy", None, &c, false));
+        assert!(s.excluded.contains("t1"));
+    }
+
+    #[test]
+    fn new_tabs_are_adopted_only_when_asked_for() {
+        let off = cfg(AdoptionMode::OptIn);
+        let on = Adoption {
+            adopt_new_tabs: true,
+            ..cfg(AdoptionMode::OptIn)
+        };
+        let s = State::default();
+        // A name herdr invented, which no adoption rule would otherwise match.
+        assert_eq!(s.decide("t1", "scratch", None, &off, true), Decision::Skip);
+        assert_eq!(s.decide("t1", "scratch", None, &on, true), Decision::Write);
+        // Tabs that predate the daemon are still left alone.
+        assert_eq!(s.decide("t1", "scratch", None, &on, false), Decision::Skip);
     }
 
     #[test]

@@ -89,6 +89,21 @@ mode = "generated_only"
 # Extra labels to treat as herdr-generated, beyond the built-in list.
 generated_names = []
 
+# Title every tab created after the daemon started, whatever herdr called it.
+#
+# Turn this on together with herdr's own setting:
+#
+#   [ui]
+#   prompt_new_tab_name = false     # in ~/.config/herdr/config.toml
+#
+# With the prompt off, herdr stops asking for a name and invents one, so no one
+# chose it and there is nothing to preserve - every new tab is simply titled.
+# Leave this off while the prompt is on, or a name you type into the prompt is
+# overwritten the moment you finish typing it.
+#
+# Renaming a tab still wins either way: that tab is left alone from then on.
+adopt_new_tabs = false
+
 # Per-app overrides, merged over the built-in table by id. Higher rank wins when
 # several known apps share a pane, which is how "claude running nvim" resolves.
 #

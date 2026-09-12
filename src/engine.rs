@@ -85,6 +85,10 @@ pub struct Engine {
     procs: HashMap<String, ProcCache>,
     last_pass: Option<Instant>,
     config_stamp: Option<std::time::SystemTime>,
+    /// Tabs present at the previous pass. `None` until the first pass, so the
+    /// tabs that already existed when the daemon started are never mistaken
+    /// for ones created under its watch.
+    seen_tabs: Option<BTreeSet<String>>,
 }
 
 /// What a pass did, for logging and for the one-shot commands.
@@ -107,6 +111,7 @@ impl Engine {
             procs: HashMap::new(),
             last_pass: None,
             config_stamp: config_mtime(),
+            seen_tabs: None,
         })
     }
 
@@ -202,6 +207,7 @@ impl Engine {
 
         let live: BTreeSet<String> = snap.tabs.iter().map(|t| t.tab_id.clone()).collect();
         self.state.prune(&live);
+        let baseline = self.seen_tabs.replace(live.clone());
 
         for tab in &snap.tabs {
             // The focused pane owns the tab's identity; fall back to the tab's
@@ -214,10 +220,14 @@ impl Engine {
 
             let current = tab.label.clone().unwrap_or_default();
             let folder = pane.dir().map(|d| label::folder_name(d, &self.cfg));
-            if !self
-                .state
-                .may_write(&tab.tab_id, &current, folder.as_deref(), &self.cfg.adoption)
-            {
+            let is_new = baseline.as_ref().is_some_and(|b| !b.contains(&tab.tab_id));
+            if !self.state.may_write(
+                &tab.tab_id,
+                &current,
+                folder.as_deref(),
+                &self.cfg.adoption,
+                is_new,
+            ) {
                 report.skipped += 1;
                 continue;
             }
@@ -263,10 +273,13 @@ impl Engine {
             let Some(pane) = pane else { continue };
             let current = tab.label.clone().unwrap_or_default();
             let folder = pane.dir().map(|d| label::folder_name(d, &self.cfg));
-            let managed =
-                self.state
-                    .decide(&tab.tab_id, &current, folder.as_deref(), &self.cfg.adoption)
-                    == Decision::Write;
+            let managed = self.state.decide(
+                &tab.tab_id,
+                &current,
+                folder.as_deref(),
+                &self.cfg.adoption,
+                false,
+            ) == Decision::Write;
             let label = self.label_for(pane);
             out.push((tab.clone(), pane.clone(), label, managed));
         }

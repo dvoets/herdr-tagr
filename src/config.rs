@@ -118,6 +118,12 @@ pub struct Adoption {
     pub mode: AdoptionMode,
     /// Extra labels to treat as herdr-generated, beyond the built-in list.
     pub generated_names: Vec<String>,
+    /// Title every tab created after the daemon started, whatever herdr called
+    /// it. Pair with `prompt_new_tab_name = false` in herdr's own config: with
+    /// the prompt off no one chose that name, so there is nothing to preserve.
+    /// Leave it off while the prompt is on, or a name typed into the prompt
+    /// would be overwritten immediately.
+    pub adopt_new_tabs: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -201,6 +207,7 @@ impl Default for Adoption {
         Self {
             mode: AdoptionMode::GeneratedOnly,
             generated_names: Vec::new(),
+            adopt_new_tabs: false,
         }
     }
 }
