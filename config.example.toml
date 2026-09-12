@@ -81,12 +81,14 @@ recheck_non_repo_ms = 10000
 #
 #   [ui.sidebar.agents]
 #   row_gap = 0
-#   rows = [[
-#     "state_icon",
-#     { token = "$icon",   fg = "#cba6f7", dim = false },
-#     { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
-#     { token = "$branch", fg = "#a6e3a1", dim = false },
-#   ]]
+#   rows = [
+#     [
+#       "state_icon",
+#       { token = "$icon", fg = "#cba6f7", dim = false },
+#       { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
+#     ],
+#     [{ token = "$branch", fg = "#a6e3a1", dim = false }],
+#   ]
 #
 # The app icon already says which agent it is, so herdr's default "agent" row
 # (a line reading "claude") is dropped, which buys the width the branch needs.

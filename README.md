@@ -155,7 +155,7 @@ own - no restart needed.
 ## The sidebar
 
 herdr's agent panel is narrower than the tab bar, so a branch that fits in a tab
-gets truncated out of it - ` herdr-tagr (...`. But unlike the tab bar, the
+gets truncated out of it - ` herdr-tagr (...`. But unlike the tab bar, the
 sidebar *can* colour each token separately.
 
 So the plugin also publishes the label's parts as pane metadata, and the panel
@@ -165,28 +165,31 @@ lays them out itself:
 # ~/.config/herdr/config.toml
 [ui.sidebar.agents]
 row_gap = 0
-rows = [[
-  "state_icon",
-  { token = "$icon",   fg = "#cba6f7", dim = false },
-  { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
-  { token = "$branch", fg = "#a6e3a1", dim = false },
-]]
+rows = [
+  [
+    "state_icon",
+    { token = "$icon", fg = "#cba6f7", dim = false },
+    { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
+  ],
+  [{ token = "$branch", fg = "#a6e3a1", dim = false }],
+]
 ```
 
 ```
-before                          after
---------------------------      --------------------------
- herdr-tagr (...      herdr-tagr  main
-  claude
+before                     after
+----------------------     ----------------------
+ herdr-tagr (...       herdr-tagr
+  claude                     main
 ```
 
-Three things buy the space: the app icon already says which agent it is, so
-herdr's default `agent` row (a line reading `claude`) goes; the workspace name
-repeated on every row goes; and `$branch` is its own token rather than the tail
-of a string. `dim = false` lifts the rows off the panel background.
+The branch gets the second row - the one herdr spent on a line reading
+`claude`, which the app icon already tells you. The workspace name repeated on
+every row goes too, and `$branch` is its own token rather than the tail of a
+string, so nothing truncates it away. `dim = false` lifts the rows off the
+panel background.
 
-Add `"workspace"` back into the row if you want the space name there too. Turn
-the whole thing off with `report_tokens = false`.
+Add `"workspace"` back into the first row if you want the space name there too.
+Turn the whole thing off with `report_tokens = false`.
 
 ## How it works
 
