@@ -16,6 +16,9 @@ use crate::detect::{self, Detected, ProcessInfo};
 use crate::git;
 use crate::icons::{self, App};
 use crate::label::{self, Context};
+
+/// Identifies this plugin as the author of the pane metadata it reports.
+const TOKEN_SOURCE: &str = "herdr-tagr";
 use crate::socket::Client;
 use crate::state::{Decision, State};
 
@@ -89,6 +92,9 @@ pub struct Engine {
     /// tabs that already existed when the daemon started are never mistaken
     /// for ones created under its watch.
     seen_tabs: Option<BTreeSet<String>>,
+    /// Last token set reported per pane, so an idle session does not re-send
+    /// metadata that has not changed.
+    reported: HashMap<String, label::Tokens>,
 }
 
 /// What a pass did, for logging and for the one-shot commands.
@@ -112,6 +118,7 @@ impl Engine {
             last_pass: None,
             config_stamp: config_mtime(),
             seen_tabs: None,
+            reported: HashMap::new(),
         })
     }
 
@@ -191,6 +198,42 @@ impl Engine {
         label::render(&ctx, &self.cfg, &mut self.git)
     }
 
+    /// Publishes the label's parts as pane metadata, for herdr's sidebar.
+    ///
+    /// The sidebar can colour each token separately and is narrower than the
+    /// tab bar, so it wants the pieces rather than the finished label: a branch
+    /// that fits in a tab gets truncated away in the panel.
+    fn report_tokens(&mut self, pane: &Pane, report: &mut PassReport) {
+        let detected = self.detected_for(pane);
+        let ctx = Context {
+            detected: &detected,
+            cwd: pane.dir(),
+            terminal_title: pane.title(),
+        };
+        let tokens = label::tokens(&ctx, &self.cfg, &mut self.git);
+        if self.reported.get(&pane.pane_id) == Some(&tokens) {
+            return;
+        }
+
+        // A token that no longer applies is sent as null, which clears it -
+        // otherwise a pane that left a repository would keep showing a branch.
+        let payload = json!({
+            "pane_id": pane.pane_id,
+            "source": TOKEN_SOURCE,
+            "tokens": {
+                "icon": tokens.icon,
+                "folder": tokens.folder,
+                "branch": tokens.branch,
+            },
+        });
+        match self.client.request("pane.report_metadata", payload) {
+            Ok(_) => {
+                self.reported.insert(pane.pane_id.clone(), tokens);
+            }
+            Err(e) => report.errors.push(e),
+        }
+    }
+
     /// Recomputes every tab and renames the ones that need it.
     pub fn pass(&mut self) -> Result<PassReport, String> {
         self.last_pass = Some(Instant::now());
@@ -204,6 +247,14 @@ impl Engine {
             .collect();
         let panes: HashMap<&str, &Pane> =
             snap.panes.iter().map(|p| (p.pane_id.as_str(), p)).collect();
+
+        if self.cfg.sidebar.report_tokens {
+            for pane in &snap.panes {
+                self.report_tokens(pane, &mut report);
+            }
+            self.reported
+                .retain(|id, _| snap.panes.iter().any(|p| &p.pane_id == id));
+        }
 
         let live: BTreeSet<String> = snap.tabs.iter().map(|t| t.tab_id.clone()).collect();
         self.state.prune(&live);

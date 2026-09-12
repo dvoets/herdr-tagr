@@ -146,6 +146,59 @@ fn join_glyph(glyph: &str, name: &str) -> String {
     }
 }
 
+/// The label's pieces, for consumers that lay them out themselves.
+///
+/// herdr's sidebar can colour each token separately and has its own width, so
+/// it wants the parts rather than the finished string - a branch that fits in
+/// a tab can still be truncated away in a narrow panel.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Tokens {
+    pub icon: Option<String>,
+    /// Folder name, or `host:folder` for an ssh pane.
+    pub folder: Option<String>,
+    /// Glyph plus branch or short commit. Always named, whatever
+    /// `default_branch_style` does to the tab label, because the point of the
+    /// sidebar is to have the room to say it.
+    pub branch: Option<String>,
+}
+
+pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
+    let icon = Some(ctx.detected.app.icon.clone()).filter(|i| !i.is_empty());
+
+    if ctx.detected.app.kind == Kind::Ssh && cfg.ssh.enabled {
+        if let Some(host) = &ctx.detected.ssh_host {
+            return Tokens {
+                icon,
+                folder: Some(ssh_segment(host, ctx, cfg)),
+                branch: None,
+            };
+        }
+    }
+
+    let folder = ctx
+        .cwd
+        .map(|c| folder_name(c, cfg))
+        .filter(|f| !f.is_empty());
+    let branch = ctx
+        .cwd
+        .and_then(|c| git.repo(Path::new(c), cfg))
+        .map(|repo| match &repo.head {
+            Head::Branch(b) => join_glyph(&cfg.git.branch_glyph, b),
+            Head::Detached(sha) => join_glyph(
+                &cfg.git.detached_glyph,
+                &sha.chars()
+                    .take(cfg.git.detached_len.max(4))
+                    .collect::<String>(),
+            ),
+        });
+
+    Tokens {
+        icon,
+        folder,
+        branch,
+    }
+}
+
 fn ssh_segment(host: &str, ctx: &Context<'_>, cfg: &Config) -> String {
     let remote = if cfg.ssh.remote_folder_from_title {
         ctx.terminal_title.and_then(|t| remote_folder(t, host, cfg))

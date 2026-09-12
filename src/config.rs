@@ -15,6 +15,7 @@ pub struct Config {
     pub git: Git,
     pub ssh: Ssh,
     pub adoption: Adoption,
+    pub sidebar: Sidebar,
     /// Per-app icon/rank overrides, merged over the built-in table by app id.
     pub apps: BTreeMap<String, AppOverride>,
 }
@@ -135,6 +136,23 @@ pub enum AdoptionMode {
     Always,
     /// Title nothing until a tab is adopted with the `adopt` action.
     OptIn,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Sidebar {
+    /// Publish the label's parts as pane metadata, so herdr's sidebar can show
+    /// and colour them individually. Harmless when unused: herdr only renders
+    /// tokens a sidebar layout actually asks for.
+    pub report_tokens: bool,
+}
+
+impl Default for Sidebar {
+    fn default() -> Self {
+        Self {
+            report_tokens: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
