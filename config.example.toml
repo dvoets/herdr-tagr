@@ -31,6 +31,18 @@ max_length = 32
 home_symbol = "~"
 ellipsis = "\u2026"
 
+# In a linked worktree, show the parent repository's name rather than the
+# checkout directory. herdr names a worktree checkout after its branch
+# (.herdr/worktrees/herdr-tagr/feat-sidebar-colours), so the directory would
+# otherwise repeat the branch and crowd it out of the label:
+#
+#   false   \uf120 feat-sidebar-colours (\ue725 feat/...
+#   true    \uf120 herdr-tagr (\ue725 feat/sideba...)
+#
+# herdr reports the worktree's parent repository itself, so this is a lookup
+# rather than a guess from the directory name.
+worktree_repo_name = true
+
 [git]
 # Longer branch names are truncated to this many characters.
 branch_max = 12

@@ -47,6 +47,10 @@ pub struct Label {
     /// Shown instead of the folder when the directory is `$HOME`.
     pub home_symbol: String,
     pub ellipsis: String,
+    /// In a linked worktree, show the parent repository's name rather than the
+    /// checkout directory. herdr names a worktree checkout after its branch,
+    /// so the directory would otherwise repeat the branch and crowd it out.
+    pub worktree_repo_name: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -201,6 +205,7 @@ impl Default for Label {
             max_length: 32,
             home_symbol: "~".to_string(),
             ellipsis: "\u{2026}".to_string(),
+            worktree_repo_name: true,
         }
     }
 }

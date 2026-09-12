@@ -61,6 +61,27 @@ brackets with `wrap = ["", ""]`.
 of the marker changing sides as you switch branches: a glyph-only marker leads,
 a named one trails.
 
+## Worktrees
+
+herdr names a worktree checkout after its branch, so the directory and the
+branch say the same thing - and the branch, being last, is the half that gets
+truncated away:
+
+```
+ feat-sidebar-colours ( feat/...
+```
+
+In a linked worktree the folder is therefore the *parent repository*, which
+says which project this is while the branch says which worktree:
+
+```
+ herdr-tagr ( feat/sideba...)
+```
+
+herdr reports a workspace's worktree provenance in its snapshot, so this is a
+lookup rather than a guess from the shape of the path. Turn it off with
+`worktree_repo_name = false`.
+
 ## Which icon wins
 
 A pane usually contains more than one process. A claude pane also holds its MCP

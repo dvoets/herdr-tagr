@@ -29,6 +29,21 @@ pub struct Context<'a> {
     pub cwd: Option<&'a str>,
     /// Raw terminal title, used to recover the remote directory over ssh.
     pub terminal_title: Option<&'a str>,
+    /// Parent repository name when this pane sits in a linked worktree, which
+    /// replaces the folder: the checkout directory is named after the branch,
+    /// so showing both says the same thing twice.
+    pub worktree_repo: Option<&'a str>,
+}
+
+impl Context<'_> {
+    /// The folder segment: the parent repository for a linked worktree,
+    /// otherwise the current directory's name.
+    fn folder(&self, cfg: &Config) -> Option<String> {
+        match self.worktree_repo {
+            Some(repo) => Some(repo.to_string()),
+            None => self.cwd.map(|c| folder_name(c, cfg)),
+        }
+    }
 }
 
 pub fn render(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> String {
@@ -59,9 +74,7 @@ pub fn render(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> String {
     };
 
     let folder = if cfg.label.show_folder {
-        ctx.cwd
-            .map(|c| folder_name(c, cfg))
-            .filter(|f| !f.is_empty())
+        ctx.folder(cfg).filter(|f| !f.is_empty())
     } else {
         None
     };
@@ -175,10 +188,7 @@ pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
         }
     }
 
-    let folder = ctx
-        .cwd
-        .map(|c| folder_name(c, cfg))
-        .filter(|f| !f.is_empty());
+    let folder = ctx.folder(cfg).filter(|f| !f.is_empty());
     // U+2800 BRAILLE PATTERN BLANK, not a space: herdr trims whitespace off
     // token values, and every actual space character is Unicode White_Space.
     // The braille blank is punctuation as far as trimming is concerned and
@@ -301,6 +311,7 @@ mod tests {
             detected: d,
             cwd,
             terminal_title: title,
+            worktree_repo: None,
         }
     }
 
@@ -443,6 +454,28 @@ mod tests {
         };
         let r = repo(Head::Branch("feat/auth".into()), "main");
         assert_eq!(label_with(&r, "api", &cfg), "I \u{e725} feat/auth api");
+    }
+
+    #[test]
+    fn a_worktree_shows_its_parent_repository() {
+        let cfg = Config::default();
+        let mut git = Cache::default();
+        let d = Detected {
+            app: app("shell", "I", Kind::Shell),
+            ssh_host: None,
+        };
+        // herdr names a worktree checkout after its branch, so without this the
+        // label would read "feat-auth (branch feat/auth)".
+        let c = Context {
+            detected: &d,
+            cwd: Some("/home/u/.herdr/worktrees/proj/feat-auth"),
+            terminal_title: None,
+            worktree_repo: Some("proj"),
+        };
+        assert_eq!(render(&c, &cfg, &mut git), "I proj");
+
+        let t = tokens(&c, &cfg, &mut git);
+        assert_eq!(t.folder.as_deref(), Some("proj"));
     }
 
     #[test]

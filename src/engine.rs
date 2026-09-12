@@ -27,6 +27,8 @@ pub struct Pane {
     pub pane_id: String,
     pub tab_id: String,
     #[serde(default)]
+    pub workspace_id: String,
+    #[serde(default)]
     pub cwd: Option<String>,
     #[serde(default)]
     pub foreground_cwd: Option<String>,
@@ -62,6 +64,23 @@ struct Layout {
     focused_pane_id: Option<String>,
 }
 
+/// herdr reports a workspace's worktree provenance itself, so the parent
+/// repository is a lookup rather than something to infer from path shapes.
+#[derive(Debug, Clone, Deserialize, Default)]
+struct Worktree {
+    #[serde(default)]
+    is_linked_worktree: bool,
+    #[serde(default)]
+    repo_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct Workspace {
+    workspace_id: String,
+    #[serde(default)]
+    worktree: Option<Worktree>,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 struct Snapshot {
     #[serde(default)]
@@ -70,6 +89,8 @@ struct Snapshot {
     tabs: Vec<Tab>,
     #[serde(default)]
     layouts: Vec<Layout>,
+    #[serde(default)]
+    workspaces: Vec<Workspace>,
 }
 
 /// Cached process detection, so a chatty pane does not trigger a
@@ -95,6 +116,8 @@ pub struct Engine {
     /// Last token set reported per pane, so an idle session does not re-send
     /// metadata that has not changed.
     reported: HashMap<String, label::Tokens>,
+    /// workspace id -> parent repository name, for linked worktrees only.
+    worktrees: HashMap<String, String>,
 }
 
 /// What a pass did, for logging and for the one-shot commands.
@@ -119,6 +142,7 @@ impl Engine {
             config_stamp: config_mtime(),
             seen_tabs: None,
             reported: HashMap::new(),
+            worktrees: HashMap::new(),
         })
     }
 
@@ -142,6 +166,29 @@ impl Engine {
         match self.last_pass {
             None => true,
             Some(t) => t.elapsed() >= Duration::from_millis(self.cfg.general.min_interval_ms),
+        }
+    }
+
+    /// A worktree checkout is usually named after its branch, so showing that
+    /// directory alongside the branch says the same thing twice and crowds out
+    /// the branch itself. The parent repository is the useful other half.
+    fn worktree_repo(&self, pane: &Pane) -> Option<&str> {
+        if !self.cfg.label.worktree_repo_name {
+            return None;
+        }
+        self.worktrees.get(&pane.workspace_id).map(String::as_str)
+    }
+
+    fn note_worktrees(&mut self, snap: &Snapshot) {
+        self.worktrees.clear();
+        for ws in &snap.workspaces {
+            if let Some(wt) = &ws.worktree {
+                if wt.is_linked_worktree {
+                    if let Some(name) = &wt.repo_name {
+                        self.worktrees.insert(ws.workspace_id.clone(), name.clone());
+                    }
+                }
+            }
         }
     }
 
@@ -189,11 +236,13 @@ impl Engine {
 
     /// Computes the label a pane should produce, without writing anything.
     pub fn label_for(&mut self, pane: &Pane) -> String {
+        let worktree_repo = self.worktree_repo(pane).map(str::to_string);
         let detected = self.detected_for(pane);
         let ctx = Context {
             detected: &detected,
             cwd: pane.dir(),
             terminal_title: pane.title(),
+            worktree_repo: worktree_repo.as_deref(),
         };
         label::render(&ctx, &self.cfg, &mut self.git)
     }
@@ -209,6 +258,7 @@ impl Engine {
             detected: &detected,
             cwd: pane.dir(),
             terminal_title: pane.title(),
+            worktree_repo: self.worktrees.get(&pane.workspace_id).map(String::as_str),
         };
         let tokens = label::tokens(&ctx, &self.cfg, &mut self.git);
         if self.reported.get(&pane.pane_id) == Some(&tokens) {
@@ -238,6 +288,7 @@ impl Engine {
     pub fn pass(&mut self) -> Result<PassReport, String> {
         self.last_pass = Some(Instant::now());
         let snap = self.snapshot()?;
+        self.note_worktrees(&snap);
         let mut report = PassReport::default();
 
         let focused: HashMap<&str, &str> = snap
@@ -307,6 +358,7 @@ impl Engine {
     /// Tab / pane pairs with the label each would get, for `print` and `doctor`.
     pub fn preview(&mut self) -> Result<Vec<(Tab, Pane, String, bool)>, String> {
         let snap = self.snapshot()?;
+        self.note_worktrees(&snap);
         let focused: HashMap<&str, &str> = snap
             .layouts
             .iter()
