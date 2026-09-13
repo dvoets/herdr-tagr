@@ -11,6 +11,7 @@ mod icons;
 mod label;
 mod socket;
 mod state;
+mod transport;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -96,7 +97,11 @@ fn daemon() -> Result<(), String> {
     }
 
     let dirty = Arc::new(AtomicBool::new(false));
-    spawn_event_reader(Arc::clone(&dirty), debug);
+    spawn_event_reader(
+        Arc::clone(&dirty),
+        debug,
+        engine.cfg.general.socket_path.clone(),
+    );
 
     let debounce = Duration::from_millis(engine.cfg.general.debounce_ms);
     let poll = engine.cfg.general.poll_ms;
@@ -142,11 +147,11 @@ fn daemon() -> Result<(), String> {
 }
 
 /// Reads the event stream forever, reconnecting with backoff if herdr restarts.
-fn spawn_event_reader(dirty: Arc<AtomicBool>, debug: bool) {
+fn spawn_event_reader(dirty: Arc<AtomicBool>, debug: bool, socket_path: String) {
     thread::spawn(move || {
         let mut backoff = Duration::from_millis(250);
         loop {
-            let client = match crate::socket::Client::from_env() {
+            let client = match crate::socket::Client::from_env(Some(&socket_path)) {
                 Ok(c) => c,
                 Err(e) => {
                     if debug {

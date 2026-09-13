@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub general: General,
@@ -20,7 +20,7 @@ pub struct Config {
     pub apps: BTreeMap<String, AppOverride>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct General {
     /// Coalescing window after an event burst before recomputing.
@@ -32,9 +32,16 @@ pub struct General {
     /// Fallback poll when the event stream is unavailable. 0 disables it.
     pub poll_ms: u64,
     pub debug: bool,
+    /// Overrides the herdr endpoint. Empty means `HERDR_SOCKET_PATH`, which
+    /// herdr injects into every plugin command, then the platform default:
+    /// `~/.config/herdr/herdr.sock` on Unix, `\\.\pipe\herdr` on Windows.
+    pub socket_path: String,
+    /// Rename tabs. Turn off to leave the tab bar alone and use this purely as
+    /// a source of sidebar metadata.
+    pub rename_tabs: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Label {
     pub show_icon: bool,
@@ -53,7 +60,7 @@ pub struct Label {
     pub worktree_repo_name: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Git {
     pub branch_max: usize,
@@ -107,7 +114,7 @@ pub enum DefaultBranchStyle {
     Name,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Ssh {
     pub enabled: bool,
@@ -117,7 +124,7 @@ pub struct Ssh {
     pub separator: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Adoption {
     pub mode: AdoptionMode,
@@ -142,7 +149,7 @@ pub enum AdoptionMode {
     OptIn,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Sidebar {
     /// Publish the label's parts as pane metadata, so herdr's sidebar can show
@@ -163,6 +170,12 @@ pub struct Sidebar {
     /// branch token itself opens with a glyph and a space, so 4 lines the
     /// branch name up under the folder.
     pub branch_indent: usize,
+    /// Names the reported tokens are published under, referenced from herdr's
+    /// sidebar layout as `$icon`, `$folder` and `$branch`. Rename them if they
+    /// would collide with another plugin's tokens.
+    pub token_icon: String,
+    pub token_folder: String,
+    pub token_branch: String,
 }
 
 impl Default for Sidebar {
@@ -170,11 +183,14 @@ impl Default for Sidebar {
         Self {
             report_tokens: true,
             branch_indent: 0,
+            token_icon: "icon".to_string(),
+            token_folder: "folder".to_string(),
+            token_branch: "branch".to_string(),
         }
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AppOverride {
     pub icon: Option<String>,
@@ -191,6 +207,8 @@ impl Default for General {
             process_ttl_ms: 1500,
             poll_ms: 0,
             debug: false,
+            socket_path: String::new(),
+            rename_tabs: true,
         }
     }
 }
@@ -278,5 +296,29 @@ impl Config {
                 Self::default()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The shipped example must parse, and must describe exactly the defaults
+    /// the code applies. Without this the documentation drifts silently: the
+    /// example is what users copy, and a stale value there is worse than none.
+    #[test]
+    fn the_example_config_matches_the_defaults() {
+        let example = include_str!("../config.example.toml");
+        let parsed: Config = toml::from_str(example)
+            .unwrap_or_else(|e| panic!("config.example.toml does not parse: {e}"));
+        assert_eq!(parsed, Config::default());
+    }
+
+    /// `deny_unknown_fields` turns a typo into a silent fallback to defaults,
+    /// so it has to be an error the user sees rather than a shrug.
+    #[test]
+    fn an_unknown_key_is_rejected_rather_than_ignored() {
+        assert!(toml::from_str::<Config>("[general]\nnot_a_key = 1\n").is_err());
+        assert!(toml::from_str::<Config>("[nope]\nx = 1\n").is_err());
     }
 }

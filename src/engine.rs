@@ -132,7 +132,7 @@ impl Engine {
     pub fn new() -> Result<Self, String> {
         let cfg = Config::load();
         Ok(Self {
-            client: Client::from_env()?,
+            client: Client::from_env(Some(&cfg.general.socket_path))?,
             apps: icons::table(&cfg),
             cfg,
             state: State::load(),
@@ -271,9 +271,9 @@ impl Engine {
             "pane_id": pane.pane_id,
             "source": TOKEN_SOURCE,
             "tokens": {
-                "icon": tokens.icon,
-                "folder": tokens.folder,
-                "branch": tokens.branch,
+                self.cfg.sidebar.token_icon.as_str(): tokens.icon,
+                self.cfg.sidebar.token_folder.as_str(): tokens.folder,
+                self.cfg.sidebar.token_branch.as_str(): tokens.branch,
             },
         });
         match self.client.request("pane.report_metadata", payload) {
@@ -334,6 +334,10 @@ impl Engine {
                 continue;
             }
 
+            if !self.cfg.general.rename_tabs {
+                report.skipped += 1;
+                continue;
+            }
             let next = self.label_for(pane);
             if next.is_empty() || next == current {
                 self.state.record_written(&tab.tab_id, &next);

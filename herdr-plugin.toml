@@ -1,13 +1,20 @@
 id = "herdr-tagr"
 name = "Tagr"
-version = "0.1.0"
+version = "0.2.0"
 min_herdr_version = "0.7.5"
-description = "Concise, icon-first tab titles: app icon + git branch + folder."
-platforms = ["linux", "macos"]
+description = "Concise, icon-first tab titles: app icon + folder + git branch."
+platforms = ["linux", "macos", "windows"]
 
-# Built once at install time. Produces ./target/release/herdr-tagr.
+# Built once at install time.
 [[build]]
 command = ["cargo", "build", "--release"]
+
+# Cargo emits herdr-tagr.exe on Windows, but a plugin command is one string for
+# every platform and herdr skips PATHEXT resolution for a path with separators.
+# A copy without the extension makes the one path below valid everywhere.
+[[build]]
+command = ["cmd", "/c", "copy", "/y", "target\\release\\herdr-tagr.exe", "target\\release\\herdr-tagr"]
+platforms = ["windows"]
 
 # Long-lived daemon: subscribes to the herdr event stream and retitles tabs.
 [[startup]]

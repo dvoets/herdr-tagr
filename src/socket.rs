@@ -8,11 +8,12 @@
 
 use std::cell::Cell;
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use serde_json::{json, Value};
+
+use crate::transport::{self, Stream};
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -22,17 +23,19 @@ pub struct Client {
 }
 
 impl Client {
-    /// Resolves the socket from `HERDR_SOCKET_PATH` (injected into every plugin
-    /// command), falling back to the documented default location.
-    pub fn from_env() -> Result<Self> {
-        let path = match std::env::var_os("HERDR_SOCKET_PATH") {
+    /// Resolves the endpoint from an explicit override, then
+    /// `HERDR_SOCKET_PATH` (injected into every plugin command), then the
+    /// platform default.
+    pub fn from_env(override_path: Option<&str>) -> Result<Self> {
+        let path = match override_path.filter(|p| !p.is_empty()) {
             Some(p) => PathBuf::from(p),
-            None => {
-                let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
-                PathBuf::from(home).join(".config/herdr/herdr.sock")
-            }
+            None => match std::env::var_os("HERDR_SOCKET_PATH") {
+                Some(p) => PathBuf::from(p),
+                None => transport::default_socket_path()
+                    .ok_or("no home directory, and HERDR_SOCKET_PATH is not set")?,
+            },
         };
-        if !path.exists() {
+        if !transport::looks_present(&path) {
             return Err(format!("herdr socket not found at {}", path.display()));
         }
         Ok(Self {
@@ -41,8 +44,8 @@ impl Client {
         })
     }
 
-    fn connect(&self) -> Result<UnixStream> {
-        let s = UnixStream::connect(&self.path)
+    fn connect(&self) -> Result<Stream> {
+        let s = Stream::connect(&self.path)
             .map_err(|e| format!("connect {}: {e}", self.path.display()))?;
         s.set_read_timeout(Some(Duration::from_secs(10))).ok();
         s.set_write_timeout(Some(Duration::from_secs(10))).ok();
@@ -114,7 +117,7 @@ impl Client {
 }
 
 pub struct Events {
-    reader: BufReader<UnixStream>,
+    reader: BufReader<Stream>,
 }
 
 impl Iterator for Events {

@@ -8,6 +8,8 @@
 #
 # Glyphs are written as \uXXXX escapes rather than literal characters so this
 # file stays plain ASCII and cannot be mangled in transit. TOML decodes them.
+#
+# Full reference: docs/configuration.md
 
 [general]
 # Coalescing window after a burst of herdr events before recomputing.
@@ -20,6 +22,13 @@ process_ttl_ms = 1500
 poll_ms = 0
 # Log every rename (herdr plugin log list --plugin herdr-tagr).
 debug = false
+# Override the herdr endpoint. Empty uses HERDR_SOCKET_PATH, which herdr
+# injects into every plugin command, then the platform default:
+# ~/.config/herdr/herdr.sock on Unix, \\.\pipe\herdr on Windows.
+socket_path = ""
+# Rename tabs. Set false to leave the tab bar alone and use this purely as a
+# source of sidebar metadata.
+rename_tabs = true
 
 [label]
 show_icon = true
@@ -30,7 +39,6 @@ separator = " "
 max_length = 32
 home_symbol = "~"
 ellipsis = "\u2026"
-
 # In a linked worktree, show the parent repository's name rather than the
 # checkout directory. herdr names a worktree checkout after its branch
 # (.herdr/worktrees/herdr-tagr/feat-sidebar-colours), so the directory would
@@ -121,6 +129,13 @@ report_tokens = true
 #   \u2713 \uf069 \u00b7 herdr-tagr
 #       \ue725 main
 branch_indent = 0
+
+# Names the tokens are published under, referenced from herdr's sidebar layout
+# as $icon, $folder and $branch. Rename them if they would collide with another
+# plugin's tokens.
+token_icon = "icon"
+token_folder = "folder"
+token_branch = "branch"
 
 [ssh]
 enabled = true

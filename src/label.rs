@@ -256,8 +256,8 @@ pub fn folder_name(path: &str, cfg: &Config) -> String {
     if path == "~" {
         return cfg.label.home_symbol.clone();
     }
-    if let Some(home) = std::env::var_os("HOME") {
-        if Path::new(path) == Path::new(&home) {
+    if let Some(home) = crate::transport::home_dir() {
+        if Path::new(path) == home {
             return cfg.label.home_symbol.clone();
         }
     }
@@ -358,7 +358,8 @@ mod tests {
     #[test]
     fn home_collapses_to_the_home_symbol() {
         let cfg = Config::default();
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
+        let home = crate::transport::home_dir().expect("a home directory");
+        let home = home.to_string_lossy().to_string();
         assert_eq!(folder_name(&home, &cfg), "~");
         assert_eq!(folder_name("~", &cfg), "~");
     }
