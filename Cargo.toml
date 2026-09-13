@@ -2,7 +2,7 @@
 name = "herdr-tagr"
 version = "0.2.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.85"
 description = "Concise, icon-first tab titles for herdr: app icon + git branch + folder"
 license = "MIT"
 repository = "https://github.com/dvoets/herdr-tagr"

@@ -36,7 +36,7 @@ herdr server stop     # restart the server to start the daemon
 herdr clones the repo, runs `cargo build --release`, and starts the daemon from
 the plugin's startup hook.
 
-Requires herdr 0.7.5+, a Rust toolchain (1.82+) at install time, and a
+Requires herdr 0.7.5+, a Rust toolchain (1.85+) at install time, and a
 [Nerd Font](https://www.nerdfonts.com/) in your terminal. Runs on Linux, macOS,
 Windows and WSL - see [docs/platforms.md](docs/platforms.md).
 

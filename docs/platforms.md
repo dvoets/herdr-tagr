@@ -1,5 +1,9 @@
 # Platforms
 
+Requires Rust 1.85 or newer at install time. The plugin's own code needs only
+1.82; the floor comes from `toml`, which pulls in a dependency using edition
+2024.
+
 | Platform | Transport | Status |
 |---|---|---|
 | Linux | Unix domain socket | Developed and used here; verified against a live herdr session |
