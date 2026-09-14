@@ -34,7 +34,17 @@ herdr server stop     # restart the server to start the daemon
 ```
 
 herdr clones the repo, runs `cargo build --release`, and starts the daemon from
-the plugin's startup hook.
+the plugin's startup hook. It ships with opinions - see
+[config/default.toml](config/default.toml) - so there is nothing to configure
+to get the behaviour above. Override any key in your own config:
+
+```bash
+$EDITOR "$(herdr plugin config-dir herdr-tagr)/config.toml"
+```
+
+Your file only needs the keys you disagree with. One part cannot ship this way:
+the sidebar layout and the new-tab prompt live in *herdr's* config, and are in
+[config/herdr.toml](config/herdr.toml) to copy across.
 
 Requires herdr 0.7.5+, a Rust toolchain (1.85+) at install time, and a
 [Nerd Font](https://www.nerdfonts.com/) in your terminal. Runs on Linux, macOS,
@@ -137,6 +147,7 @@ Setup and the column arithmetic: [docs/sidebar.md](docs/sidebar.md).
 ## Commands
 
 ```bash
+herdr-tagr config     # the effective configuration, and which layers produced it
 herdr-tagr print      # what each tab would be titled, changing nothing
 herdr-tagr doctor     # explain the current pane: processes, ranks, winner, label
 herdr-tagr refresh    # retitle everything once
@@ -151,6 +162,8 @@ every process herdr reported and the rank each one matched.
 | | |
 |---|---|
 | [docs/configuration.md](docs/configuration.md) | Every option, what it does, and why the default is what it is |
+| [config/default.toml](config/default.toml) | The shipped defaults, applied automatically |
+| [config/herdr.toml](config/herdr.toml) | The herdr-side half: sidebar layout and the new-tab prompt |
 | [docs/sidebar.md](docs/sidebar.md) | Feeding and colouring herdr's agent panel |
 | [docs/architecture.md](docs/architecture.md) | How the daemon works, and what herdr's API does and does not allow |
 | [docs/platforms.md](docs/platforms.md) | Linux, macOS, Windows, WSL - and what is verified on each |

@@ -73,15 +73,15 @@ fn relative_links_resolve() {
 }
 
 #[test]
-fn the_example_config_stays_ascii() {
+fn the_shipped_config_stays_ascii() {
     // Glyphs are written as \uXXXX escapes so the file survives being copied
     // and pasted through anything.
-    let path = repo_root().join("config.example.toml");
-    let text = std::fs::read_to_string(&path).expect("config.example.toml");
+    let path = repo_root().join("config/default.toml");
+    let text = std::fs::read_to_string(&path).expect("config/default.toml");
     for (number, line) in text.lines().enumerate() {
         assert!(
             line.is_ascii(),
-            "config.example.toml line {} is not ASCII: {line}",
+            "config/default.toml line {} is not ASCII: {line}",
             number + 1
         );
     }

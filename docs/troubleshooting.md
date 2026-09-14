@@ -11,9 +11,14 @@ rank each one matched, which one won, the pane's directory and repository, and
 the label that comes out. Most questions end here.
 
 ```bash
+herdr-tagr config         # the effective configuration, and which layers produced it
 herdr-tagr print          # every tab, what it would be titled, and whether it is managed
 herdr plugin log list --plugin herdr-tagr   # with debug = true, every rename
 ```
+
+`config` is the one to reach for when a setting seems ignored: it lists the
+layers in order, marks any that are missing, and prints the values they
+actually produced.
 
 ## A tab shows the wrong icon
 
@@ -68,6 +73,18 @@ The tokens are only rendered if a sidebar layout asks for them. Check
 
 `branch_indent` depends on what the row above contains. Recount it with the
 arithmetic in [sidebar.md](sidebar.md#the-column-arithmetic).
+
+## A setting seems to be ignored
+
+Run `herdr-tagr config`. Configuration is layered - built-in defaults, then the
+plugin's shipped `config/default.toml`, then your `config.toml` - and a key set
+in an earlier layer is overridden by a later one, not merged into it. The
+command prints the result, so you can see whether your file was read at all and
+what won.
+
+A file that does not parse is skipped with a message rather than applied
+half-way, so a stray bracket means your keys are silently absent - the message
+appears in the plugin log.
 
 ## Changes are not taking effect
 

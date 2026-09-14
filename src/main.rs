@@ -48,6 +48,7 @@ fn main() {
         "refresh" => refresh(),
         "adopt" => set_adoption(true),
         "release" => set_adoption(false),
+        "config" => show_config(),
         "print" => print_labels(),
         "doctor" => doctor(),
         "--version" | "-V" | "version" => {
@@ -78,6 +79,7 @@ Commands:
   refresh   Recompute every tab title once and exit
   adopt     Start auto-titling the current tab
   release   Stop auto-titling the current tab
+  config    Show the effective configuration and where each layer came from
   print     Show what each tab would be titled, without changing anything
   doctor    Explain how the current pane's title is derived"
     );
@@ -222,6 +224,28 @@ fn set_adoption(adopt: bool) -> Result<(), String> {
             .map(|(_, l)| format!(" -> {l}"))
             .unwrap_or_default()
     );
+    Ok(())
+}
+
+/// Prints the layers and the configuration they produce.
+///
+/// With a shipped opinion under the user's own file, "what am I actually
+/// running" stops being obvious from either file alone.
+fn show_config() -> Result<(), String> {
+    println!("layers, later winning per key:");
+    println!("  built-in defaults");
+    for path in config::Config::layers() {
+        let mark = if path.is_file() {
+            ""
+        } else {
+            "   (not present)"
+        };
+        println!("  {}{mark}", path.display());
+    }
+    let cfg = config::Config::load();
+    let text = toml::to_string_pretty(&cfg).map_err(|e| format!("rendering config: {e}"))?;
+    println!("\neffective configuration:\n");
+    print!("{text}");
     Ok(())
 }
 

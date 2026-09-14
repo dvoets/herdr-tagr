@@ -407,7 +407,7 @@ impl Engine {
     }
 }
 
+/// Newest mtime across every configuration layer.
 fn config_mtime() -> Option<std::time::SystemTime> {
-    let path = Config::path()?;
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+    Config::stamp()
 }

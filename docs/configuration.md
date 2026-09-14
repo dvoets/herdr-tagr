@@ -4,14 +4,29 @@
 $EDITOR "$(herdr plugin config-dir herdr-tagr)/config.toml"
 ```
 
-Every key has a default, so a missing file or a partial one is fine. The daemon
-notices edits on its own - no restart. An unknown key is an error rather than a
-silent fallback, and a broken file leaves the previous config in place with a
-warning in the plugin log.
+Configuration is layered, later winning **per key**:
 
-[`config.example.toml`](../config.example.toml) is the full annotated file, and
-a test asserts it parses to exactly these defaults, so it can never drift from
-the code.
+1. the defaults in the code,
+2. the plugin's shipped [`config/default.toml`](../config/default.toml) - its
+   opinion, applied automatically,
+3. your own `config.toml`.
+
+So your file only needs the handful of keys you disagree with; everything else
+keeps the shipped value. Setting `adoption.adopt_new_tabs` does not reset the
+rest of `[adoption]`.
+
+The daemon notices edits to either file on its own - no restart. An unknown key
+is an error rather than a silent fallback, and a file that does not parse is
+reported and skipped rather than taking the tab bar down with it.
+
+The tables below give the **shipped** value, which is what you actually get.
+Two of them are the plugin's opinion rather than the code's default, and are
+marked as such. A test asserts the shipped file states every key, so it cannot
+drift from the code.
+
+herdr's own half of the setup - the sidebar layout and the new-tab prompt -
+cannot be shipped this way, because it lives in herdr's config rather than the
+plugin's. It is in [`config/herdr.toml`](../config/herdr.toml) to copy across.
 
 ## `[general]`
 
@@ -114,7 +129,7 @@ host is shown alone rather than inventing a directory.
 |---|---|---|
 | `mode` | `"generated_only"` | `"generated_only"`, `"always"` or `"opt_in"` |
 | `generated_names` | `[]` | Extra labels to treat as herdr-generated |
-| `adopt_new_tabs` | `false` | Title every tab created after the daemon started |
+| `adopt_new_tabs` | `true` *(opinion; code default is `false`)* | Title every tab created after the daemon started |
 
 A label this plugin wrote is checked before any adoption rule, so renaming a
 tab always wins - including a tab handed over with the adopt action. Otherwise
@@ -146,7 +161,7 @@ is overwritten the moment you finish typing it.
 | Key | Default | What it does |
 |---|---|---|
 | `report_tokens` | `true` | Publish the label's parts as pane metadata |
-| `branch_indent` | `0` | Blank columns prefixed to the branch token |
+| `branch_indent` | `4` *(opinion; code default is `0`)* | Blank columns prefixed to the branch token |
 | `token_icon` | `"icon"` | Name the icon is published under |
 | `token_folder` | `"folder"` | Name the folder is published under |
 | `token_branch` | `"branch"` | Name the branch is published under |

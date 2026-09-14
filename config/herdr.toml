@@ -1,0 +1,38 @@
+# The herdr-side half of herdr-tagr's setup.
+#
+# These keys live in herdr's own config, not the plugin's, so the plugin cannot
+# apply them for you. Copy them into:
+#
+#   ~/.config/herdr/config.toml        (Linux, macOS, WSL)
+#   %APPDATA%\herdr\config.toml        (Windows)
+#
+# then run `herdr server reload-config`.
+#
+# Without the [ui.sidebar.agents] block the plugin still titles tabs; it just
+# publishes sidebar tokens that nothing renders.
+
+[ui]
+# Create tabs immediately with generated names instead of asking, and let the
+# plugin name them. Pair with adopt_new_tabs = true, which is the shipped
+# default.
+prompt_new_tab_name = false
+
+# Agent panel rows, built from the tokens the plugin publishes.
+#
+# The app icon already says which agent it is, so herdr's default "agent" row -
+# a line reading "claude" - is dropped, and so is the workspace name repeated
+# on every row. That buys the width for the branch, which gets its own row and
+# so cannot be truncated away.
+#
+# dim = false lifts the rows off the panel background. Colours are
+# Catppuccin-ish; change them to taste.
+[ui.sidebar.agents]
+row_gap = 0
+rows = [
+  [
+    "state_icon",
+    { token = "$icon", fg = "#cba6f7", dim = false },
+    { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
+  ],
+  [{ token = "$branch", fg = "#a6e3a1", dim = false }],
+]
