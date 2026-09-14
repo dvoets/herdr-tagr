@@ -16,6 +16,44 @@ clippy in CI on every push, and the named-pipe transport is the documented way
 plugins reach herdr there - but nobody has yet run it against herdr on Windows.
 Bug reports welcome.
 
+## Where things live
+
+`herdr plugin install dvoets/herdr-tagr` clones and builds into herdr's own
+directories. Nothing is written next to your projects.
+
+| | Path |
+|---|---|
+| Checkout and built binary | `<config>/plugins/github/herdr-tagr-<hash>` |
+| Your config | `<config>/plugins/config/herdr-tagr/config.toml` |
+| Runtime state | `<state>/plugins/herdr-tagr/state.json` |
+
+where `<config>` and `<state>` are herdr's own directories:
+
+| Platform | `<config>` | `<state>` |
+|---|---|---|
+| Linux, WSL | `$XDG_CONFIG_HOME/herdr`, else `~/.config/herdr` | `$XDG_STATE_HOME/herdr`, else `~/.local/state/herdr` |
+| macOS | `~/.config/herdr` | `~/.local/state/herdr` |
+| Windows | `%APPDATA%\herdr` | `%LOCALAPPDATA%\herdr` |
+
+macOS uses the XDG-style paths too, not `~/Library/Application Support`.
+
+Ask herdr rather than guessing:
+
+```bash
+herdr plugin config-dir herdr-tagr
+```
+
+The checkout directory is managed by herdr - reinstalling replaces it, so edits
+there are lost. Config and state survive an upgrade.
+
+The state file records the label written for each tab and which tabs you have
+renamed, so the plugin keeps its hands off those across restarts. Deleting it
+is harmless: the plugin re-derives everything, but tabs you renamed become
+eligible for adoption again.
+
+Both directories are per machine. Copying `config.toml` to another machine is
+enough to reproduce your setup; the state file is not worth copying.
+
 ## How the endpoint is found
 
 herdr injects `HERDR_SOCKET_PATH` into every plugin command, and that is used
