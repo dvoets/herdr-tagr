@@ -174,6 +174,12 @@ pub struct Sidebar {
     /// branch token itself opens with a glyph and a space, so 4 lines the
     /// branch name up under the folder.
     pub branch_indent: usize,
+    /// Leads the folder token, so the sidebar's two rows line up: the folder
+    /// glyph sits in the same column as the branch glyph below it. Sidebar
+    /// only - the tab label already leads with the app icon, and a second
+    /// glyph there costs width without saying anything new. Set to "" to drop
+    /// it.
+    pub folder_glyph: String,
     /// Names the reported tokens are published under, referenced from herdr's
     /// sidebar layout as `$icon`, `$folder` and `$branch`. Rename them if they
     /// would collide with another plugin's tokens.
@@ -187,6 +193,8 @@ impl Default for Sidebar {
         Self {
             report_tokens: true,
             branch_indent: 0,
+            // U+F07B nf-fa-folder, verified present in Hack Nerd Font.
+            folder_glyph: "\u{f07b}".to_string(),
             token_icon: "icon".to_string(),
             token_folder: "folder".to_string(),
             token_branch: "branch".to_string(),

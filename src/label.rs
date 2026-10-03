@@ -182,13 +182,22 @@ pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
         if let Some(host) = &ctx.detected.ssh_host {
             return Tokens {
                 icon,
-                folder: Some(ssh_segment(host, ctx, cfg)),
+                folder: Some(join_glyph(
+                    &cfg.sidebar.folder_glyph,
+                    &ssh_segment(host, ctx, cfg),
+                )),
                 branch: None,
             };
         }
     }
 
-    let folder = ctx.folder(cfg).filter(|f| !f.is_empty());
+    // The glyph leads the folder here but not in the tab label: it puts the
+    // folder's mark in the same column as the branch glyph on the row below,
+    // so the two rows read as a pair.
+    let folder = ctx
+        .folder(cfg)
+        .filter(|f| !f.is_empty())
+        .map(|f| join_glyph(&cfg.sidebar.folder_glyph, &f));
     // U+2800 BRAILLE PATTERN BLANK, not a space: herdr trims whitespace off
     // token values, and every actual space character is Unicode White_Space.
     // The braille blank is punctuation as far as trimming is concerned and
@@ -476,7 +485,7 @@ mod tests {
         assert_eq!(render(&c, &cfg, &mut git), "I proj");
 
         let t = tokens(&c, &cfg, &mut git);
-        assert_eq!(t.folder.as_deref(), Some("proj"));
+        assert_eq!(t.folder.as_deref(), Some("\u{f07b} proj"));
     }
 
     #[test]
@@ -503,6 +512,68 @@ mod tests {
         );
         // Padding must survive herdr trimming whitespace off token values.
         assert_eq!(branch.trim(), branch, "padding must not be whitespace");
+    }
+
+    #[test]
+    fn the_sidebar_folder_token_leads_with_the_folder_glyph() {
+        let cfg = Config::default();
+        let mut git = Cache::default();
+        let d = Detected {
+            app: app("shell", "I", Kind::Shell),
+            ssh_host: None,
+        };
+        let t = tokens(&ctx(&d, Some("/tmp"), None), &cfg, &mut git);
+        assert_eq!(t.folder.as_deref(), Some("\u{f07b} tmp"));
+    }
+
+    #[test]
+    fn the_tab_label_keeps_no_folder_glyph() {
+        // Sidebar only: the tab label already leads with the app icon.
+        let cfg = Config::default();
+        let mut git = Cache::default();
+        let d = Detected {
+            app: app("shell", "S", Kind::Shell),
+            ssh_host: None,
+        };
+        let out = render(&ctx(&d, Some("/tmp"), None), &cfg, &mut git);
+        assert_eq!(out, "S tmp");
+        assert!(!out.contains('\u{f07b}'), "got {out:?}");
+    }
+
+    #[test]
+    fn an_ssh_folder_token_keeps_the_column() {
+        // Without the glyph an ssh row would sit two columns left of every
+        // other row in the panel.
+        let cfg = Config::default();
+        let mut git = Cache::default();
+        let d = Detected {
+            app: app("ssh", "R", Kind::Ssh),
+            ssh_host: Some("apollo".into()),
+        };
+        let t = tokens(
+            &ctx(&d, Some("/home/daan"), Some("alfred@apollo:~/srv/media")),
+            &cfg,
+            &mut git,
+        );
+        assert_eq!(t.folder.as_deref(), Some("\u{f07b} apollo:media"));
+    }
+
+    #[test]
+    fn an_empty_folder_glyph_leaves_the_token_bare() {
+        let cfg = Config {
+            sidebar: crate::config::Sidebar {
+                folder_glyph: String::new(),
+                ..crate::config::Sidebar::default()
+            },
+            ..Config::default()
+        };
+        let mut git = Cache::default();
+        let d = Detected {
+            app: app("shell", "I", Kind::Shell),
+            ssh_host: None,
+        };
+        let t = tokens(&ctx(&d, Some("/tmp"), None), &cfg, &mut git);
+        assert_eq!(t.folder.as_deref(), Some("tmp"), "no leading space");
     }
 
     #[test]
