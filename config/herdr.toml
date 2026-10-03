@@ -65,17 +65,21 @@ rows = [
 ]
 
 # --- jump to the agents that want you (herdr-tagr) -----------------------------
+# herdr binds alt+ctrl+n to split_vertical by default; this takes that chord, so
+# drop it from split_vertical (alt+enter and prefix+v still reach it) or pick
+# another key here.
+#
 # Blocked first - an agent sitting on a question is stalled - then the ones that
 # have finished and not been looked at. Press again to walk the queue; it wraps,
 # and from a pane outside the queue the first press lands on the front of it.
 [[keys.command]]
-key = ["alt+d", "prefix+d"]
+key = ["alt+ctrl+n", "prefix+d"]
 type = "plugin_action"
 command = "herdr-tagr.next-attention"
 description = "next agent needing attention"
 
 [[keys.command]]
-key = ["alt+shift+d", "prefix+shift+d"]
+key = ["alt+ctrl+p", "prefix+shift+d"]
 type = "plugin_action"
 command = "herdr-tagr.prev-attention"
 description = "previous agent needing attention"

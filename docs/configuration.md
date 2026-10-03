@@ -214,7 +214,9 @@ then done.
 
 Bind them with `type = "plugin_action"` and
 `command = "herdr-tagr.next-attention"`; the shipped block in
-[../config/herdr.toml](../config/herdr.toml) uses `alt+d` and `prefix+d`.
+[../config/herdr.toml](../config/herdr.toml) uses `alt+ctrl+n` and `alt+ctrl+p`.
+herdr binds `alt+ctrl+n` to `split_vertical` by default, so that chord has to
+be dropped from it first - `alt+enter` and `prefix+v` still reach it.
 
 Both run as one-shot commands rather than through the daemon, so they work even
 if the daemon is not running.

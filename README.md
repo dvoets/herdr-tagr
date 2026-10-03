@@ -137,7 +137,7 @@ have to go and find them. These bind a key to walking that queue:
 
 ```toml
 [[keys.command]]
-key = ["alt+d", "prefix+d"]
+key = ["alt+ctrl+n", "prefix+d"]
 type = "plugin_action"
 command = "herdr-tagr.next-attention"
 description = "next agent needing attention"
