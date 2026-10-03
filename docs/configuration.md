@@ -161,7 +161,7 @@ is overwritten the moment you finish typing it.
 | Key | Default | What it does |
 |---|---|---|
 | `report_tokens` | `true` | Publish the label's parts as pane metadata |
-| `branch_indent` | `0` | Blank columns prefixed to the branch token, to align it under the row above |
+| `branch_indent` | `2` | Blank columns prefixed to the branch token, putting its glyph and name in the same columns as the folder's above |
 | `folder_glyph` | `` | Glyph leading the folder token. Sidebar only; the tab label is untouched. `""` drops it |
 | `token_icon` | `"icon"` | Base name for the icon. Also publishes `<name>_idle`, `_working`, `_blocked`, `_done` and `_unknown`, of which only the current status is populated |
 | `token_folder` | `"folder"` | Name the folder is published under |

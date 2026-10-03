@@ -82,10 +82,12 @@ folder glyph there spends two of the tab bar's scarcest columns restating what
 the label's shape already says.
 
 Because the glyph lives *inside* the `$folder` token, it takes that token's
-colour and weight from the layout rather than having one of its own, and the
-folder name sits 2 columns right of where it used to. If you would rather the
-folder name and the branch name line up than the token starts, set
-`branch_indent = 2`.
+colour and weight from the layout rather than having one of its own.
+
+It also makes `$folder` and `$branch` the same shape - glyph, space, name - so a
+single `branch_indent` lines up both halves. `2` is the shipped value, and puts
+the branch glyph under the folder glyph and the branch name under the folder
+name. The arithmetic is below.
 
 ## Why `branch_indent` is not spaces
 

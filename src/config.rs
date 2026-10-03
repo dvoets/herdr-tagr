@@ -192,7 +192,10 @@ impl Default for Sidebar {
     fn default() -> Self {
         Self {
             report_tokens: true,
-            branch_indent: 0,
+            // 2 puts the branch glyph and name in the same columns as the
+            // folder glyph and name above: see config/default.toml for the
+            // column arithmetic this comes from.
+            branch_indent: 2,
             // U+F07B nf-fa-folder, verified present in Hack Nerd Font.
             folder_glyph: "\u{f07b}".to_string(),
             token_icon: "icon".to_string(),
