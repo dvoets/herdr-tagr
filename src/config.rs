@@ -379,15 +379,11 @@ mod tests {
         let parsed: Config = toml::from_str(shipped)
             .unwrap_or_else(|e| panic!("config/default.toml does not parse: {e}"));
 
-        // Everything except the plugin's two opinions matches the code.
+        // Everything except the plugin's one opinion matches the code.
         let expected = Config {
             adoption: Adoption {
                 adopt_new_tabs: true,
                 ..Adoption::default()
-            },
-            sidebar: Sidebar {
-                branch_indent: 4,
-                ..Sidebar::default()
             },
             ..Config::default()
         };
@@ -401,13 +397,20 @@ mod tests {
         let mut merged: Value = toml::from_str(include_str!("../config/default.toml")).unwrap();
         merge(
             &mut merged,
-            toml::from_str("[adoption]\nadopt_new_tabs = false\n").unwrap(),
+            toml::from_str("[git]\nbranch_max = 20\n").unwrap(),
         );
         let cfg: Config = merged.try_into().unwrap();
 
-        assert!(!cfg.adoption.adopt_new_tabs, "the user key wins");
-        assert_eq!(cfg.sidebar.branch_indent, 4, "the shipped opinion survives");
-        assert_eq!(cfg.adoption.mode, AdoptionMode::GeneratedOnly);
+        assert_eq!(cfg.git.branch_max, 20, "the user key wins");
+        assert!(
+            cfg.adoption.adopt_new_tabs,
+            "the shipped opinion survives a user file that does not mention it"
+        );
+        assert_eq!(
+            cfg.git.default_branch_style,
+            DefaultBranchStyle::Name,
+            "untouched keys in the same section survive"
+        );
     }
 
     #[test]

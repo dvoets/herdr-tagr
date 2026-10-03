@@ -4,52 +4,63 @@ herdr's agent panel is narrower than the tab bar, so a branch that fits in a tab
 gets truncated out of it:
 
 ```
-✓ home ·  herdr-tagr (...
+✓ home ·  herdr-tagr (...
     claude
 ```
 
 But unlike the tab bar, the sidebar *can* colour each token. So the plugin
-publishes the label's parts as pane metadata and lets the panel lay them out.
+publishes the label's parts as pane metadata and lets the panel lay them out:
+
+```
+ herdr-tagr
+    main
+```
+
+Three things buy the width: the workspace name repeated on every row is
+dropped; herdr's default `agent` row - a line reading `claude` - is dropped,
+because the icon already says it; and the app icon doubles as the activity
+light, replacing herdr's `state_icon`.
 
 ## Setup
 
-In `~/.config/herdr/config.toml`:
+The block is in [`../config/herdr.toml`](../config/herdr.toml), ready to paste
+into `~/.config/herdr/config.toml`. Then `herdr server reload-config`.
 
-```toml
-[ui.sidebar.agents]
-row_gap = 0
-rows = [
-  [
-    "state_icon",
-    { token = "$icon", fg = "#cba6f7", dim = false },
-    { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
-  ],
-  [{ token = "$branch", fg = "#a6e3a1", dim = false }],
-]
-```
+The plugin side needs nothing: `report_tokens` is on by default.
 
-and in the plugin's own config:
+## The icon is the activity light
 
-```toml
-[sidebar]
-report_tokens = true
-branch_indent = 4
-```
-
-Result:
+herdr can only style a token by its **value**, and the app glyph is the same
+whatever the agent is doing. So the status rides on *which* token carries it:
+the plugin publishes one icon token per status and populates only the matching
+one.
 
 ```
-✓  herdr-tagr
-      main
+$icon_working   $icon_blocked   $icon_done   $icon_idle   $icon_unknown
 ```
 
-Three things buy the width: the app icon already says which agent it is, so
-herdr's default `agent` row (a line reading `claude`) goes; the workspace name
-repeated on every row goes; and `$branch` is its own token rather than the tail
-of a string, so nothing truncates it. `dim = false` lifts the rows off the panel
-background.
+A token with no value is skipped when the row is drawn, so exactly one of the
+five ever renders and the row costs no more width than a single icon. Each gets
+its own colour in the layout - herdr's own, from `status_color()`:
 
-Add `"workspace"` back into the first row if you want the space name there too.
+| Status | Colour | herdr's dot was |
+|---|---|---|
+| working | `#f9e2af` yellow | `●` filled |
+| blocked | `#f38ba8` red | `●` filled |
+| done | `#94e2d5` teal | `●` filled |
+| idle | `#a6e3a1` green | `○` hollow |
+| unknown | `#6c7086` grey | `·` small |
+
+One thing is lost in the trade: herdr distinguished idle from the three active
+states by shape as well as colour - a hollow ring against a filled dot. A brand
+glyph has one shape, so idle is now a colour away from working rather than a
+shape away. Put `"state_icon"` back at the front of the row if you want that
+cue, and raise `branch_indent` by 2.
+
+Icons name the **model provider** where Nerd Fonts has one: `cod-claude`,
+`cod-openai` for codex, `cod-copilot`, and a sparkle for gemini. There is no
+Mistral, Llama or Anthropic-as-such, so the other agents keep a distinct
+generic glyph.
 
 ## Why `branch_indent` is not spaces
 
@@ -63,20 +74,18 @@ as far as trimming is concerned and renders as one blank column.
 
 ## The column arithmetic
 
-herdr separates sidebar tokens with `" · "`, except after a state icon where
-it uses a single space. So for `["state_icon", "$icon", "$folder"]`:
+herdr indents the **first** row of an agent entry by 1 column and every
+**continuation** row by 3, and separates tokens with `" · "`. With the
+shipped layout:
 
 ```
-state icon   1
-space        1
-$icon        1
-" · "        3
-             = 6 columns before the folder
+row 1   indent 1 + icon 1 + " · " 3          -> folder starts at column 5
+row 2   indent 3 + pad + glyph 1 + space 1   -> name starts at 5 + pad
 ```
 
-The branch token opens with a glyph and a space, which is 2, so
-`branch_indent = 4` puts the branch name at column 6, under the folder name.
-Change the first row and you change the arithmetic.
+so `branch_indent = 0` lines them up. Put something back in front of the icon -
+`state_icon`, or the workspace name - and raise it by that token's width plus 3
+for its separator.
 
 ## Empty rows
 

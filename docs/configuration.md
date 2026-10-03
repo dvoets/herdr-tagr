@@ -161,8 +161,8 @@ is overwritten the moment you finish typing it.
 | Key | Default | What it does |
 |---|---|---|
 | `report_tokens` | `true` | Publish the label's parts as pane metadata |
-| `branch_indent` | `4` *(opinion; code default is `0`)* | Blank columns prefixed to the branch token |
-| `token_icon` | `"icon"` | Name the icon is published under |
+| `branch_indent` | `0` | Blank columns prefixed to the branch token, to align it under the row above |
+| `token_icon` | `"icon"` | Base name for the icon. Also publishes `<name>_idle`, `_working`, `_blocked`, `_done` and `_unknown`, of which only the current status is populated |
 | `token_folder` | `"folder"` | Name the folder is published under |
 | `token_branch` | `"branch"` | Name the branch is published under |
 
