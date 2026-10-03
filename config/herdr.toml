@@ -43,6 +43,8 @@ rows = [
     { token = "$icon_done", fg = "#94e2d5", dim = false },
     { token = "$icon_idle", fg = "#a6e3a1", dim = false },
     { token = "$icon_unknown", fg = "#6c7086", dim = false },
+    # $folder leads with the plugin's folder_glyph, so the glyph takes this
+    # token's colour and weight rather than having its own.
     { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
   ],
   [{ token = "$branch", fg = "#a6e3a1", dim = false }],

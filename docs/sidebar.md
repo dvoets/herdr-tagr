@@ -62,6 +62,31 @@ Icons name the **model provider** where Nerd Fonts has one: `cod-claude`,
 Mistral, Llama or Anthropic-as-such, so the other agents keep a distinct
 generic glyph.
 
+## The folder glyph
+
+The folder token leads with a glyph so the folder row carries a mark of its own,
+the way the branch row below it does:
+
+```
+  herdr-tagr
+     main
+```
+
+`folder_glyph` sets it, defaulting to `` (nf-fa-folder). `` is the
+open folder, `` the Octicons directory, `` the Seti one - all four
+verified present in Hack Nerd Font. Set it to `""` to drop the glyph; the token
+then holds the bare folder name with no leading space.
+
+This is **sidebar only**. A tab label already leads with the app icon, so a
+folder glyph there spends two of the tab bar's scarcest columns restating what
+the label's shape already says.
+
+Because the glyph lives *inside* the `$folder` token, it takes that token's
+colour and weight from the layout rather than having one of its own, and the
+folder name sits 2 columns right of where it used to. If you would rather the
+folder name and the branch name line up than the token starts, set
+`branch_indent = 2`.
+
 ## Why `branch_indent` is not spaces
 
 herdr has no literal-text sidebar token, so padding has to come from the token
