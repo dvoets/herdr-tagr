@@ -33,6 +33,10 @@ const EVENTS: &[&str] = &[
     "pane.exited",
     "pane.focused",
     "pane.agent_detected",
+    // The status transitions the sidebar's colour is made of. herdr has a
+    // dedicated event for these and `pane.updated` does not cover them, so
+    // without this a pane that stops being blocked stays blocked on screen.
+    "pane.agent_status_changed",
     "tab.created",
     "tab.closed",
     "tab.focused",

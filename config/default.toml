@@ -28,8 +28,10 @@ debounce_ms = 120
 min_interval_ms = 250
 # How long a pane's process listing stays usable before it is re-read.
 process_ttl_ms = 1500
-# Fallback polling when the event stream is unavailable. 0 disables it.
-poll_ms = 0
+# Fallback poll, so a missed or dropped event cannot leave the sidebar showing
+# a status that has moved on. The plugin is event-driven and this is only a
+# safety net, so it can be slow; 0 disables it.
+poll_ms = 5000
 # Log every rename (herdr plugin log list --plugin herdr-tagr).
 debug = false
 # Override the herdr endpoint. Empty uses HERDR_SOCKET_PATH, which herdr
