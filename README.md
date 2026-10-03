@@ -136,11 +136,15 @@ token - so the plugin publishes the label's parts as pane metadata and lets the
 panel lay them out:
 
 ```
-before                     after
-----------------------     ----------------------
- herdr-tagr (...       herdr-tagr
-  claude                        main
+before                        after
+--------------------------    --------------------------
+✓ home ·  herdr-tagr (...    herdr-tagr
+    claude                        main
 ```
+
+The icon doubles as the activity light, taking herdr's status colours - yellow
+working, red blocked, teal done, green idle - so the separate state dot goes
+too.
 
 Setup and the column arithmetic: [docs/sidebar.md](docs/sidebar.md).
 

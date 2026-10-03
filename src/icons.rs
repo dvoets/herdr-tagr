@@ -100,11 +100,16 @@ const DEFAULTS: &[(&str, &str, i32, Kind, &[&str])] = &[
         &["ncdu", "dust", "duf"],
     ),
     // Coding agents. Same rank by default so no agent silently outranks another.
-    ("claude", "\u{f069}", 60, Kind::Normal, &["claude"]),
-    ("codex", "\u{f06a9}", 60, Kind::Normal, &["codex"]),
+    //
+    // Where the vendor has a glyph in Nerd Fonts the icon names the model
+    // provider rather than the CLI, so the panel says what is answering you.
+    // The rest keep a distinct generic glyph; there is no Mistral, Llama or
+    // Anthropic-as-such in the font.
+    ("claude", "\u{ec82}", 60, Kind::Normal, &["claude"]),
+    ("codex", "\u{ec81}", 60, Kind::Normal, &["codex"]),
     ("aider", "\u{f0d0}", 60, Kind::Normal, &["aider"]),
     ("opencode", "\u{eac4}", 60, Kind::Normal, &["opencode"]),
-    ("gemini", "\u{f005}", 60, Kind::Normal, &["gemini"]),
+    ("gemini", "\u{ec10}", 60, Kind::Normal, &["gemini"]),
     (
         "cursor",
         "\u{f245}",
@@ -115,6 +120,13 @@ const DEFAULTS: &[(&str, &str, i32, Kind, &[&str])] = &[
     ("amp", "\u{f0e7}", 60, Kind::Normal, &["amp"]),
     ("goose", "\u{f13d}", 60, Kind::Normal, &["goose"]),
     ("crush", "\u{f1b3}", 60, Kind::Normal, &["crush"]),
+    (
+        "copilot",
+        "\u{ec1e}",
+        60,
+        Kind::Normal,
+        &["copilot", "gh-copilot", "copilot-cli"],
+    ),
     // Pagers and pickers.
     (
         "man",

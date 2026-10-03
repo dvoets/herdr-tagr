@@ -130,18 +130,17 @@ report_tokens = true
 # token, so the padding has to come from the value - written with U+2800
 # BRAILLE PATTERN BLANK, because herdr trims real whitespace off token values.
 #
-# Count the columns the earlier row spends before the token you are aligning
-# to. herdr separates sidebar tokens with " \u00b7 ", except after a state icon,
-# where it uses a single space. For ["state_icon", "$icon", "$folder"] that is
-# 1 + 1 + 1 + 3 = 6, and the branch token itself opens with a glyph and a
-# space, so 4 puts the branch name under the folder name:
+# herdr indents the first row of an agent entry by 1 column and every
+# continuation row by 3, and separates tokens with " \u00b7 ". With the layout in
+# config/herdr.toml:
 #
-#   \u2713 \uf069 \u00b7 herdr-tagr
-#       \ue725 main
+#   row 1   indent 1 + icon 1 + " \u00b7 " 3          -> folder starts at column 5
+#   row 2   indent 3 + pad + glyph 1 + space 1   -> name starts at 5 + pad
 #
-# Shipped as 4, which matches the sidebar layout in config/herdr.toml. Set it
-# to 0 if you put the branch on the same row as the folder.
-branch_indent = 4
+# so 0 aligns them. Put something back in front of the icon - herdr's
+# state_icon, or the workspace name - and raise this by that token's width
+# plus 3 for its separator.
+branch_indent = 0
 
 # Names the tokens are published under, referenced from herdr's sidebar layout
 # as $icon, $folder and $branch. Rename them if they would collide with another

@@ -19,19 +19,30 @@ prompt_new_tab_name = false
 
 # Agent panel rows, built from the tokens the plugin publishes.
 #
-# The app icon already says which agent it is, so herdr's default "agent" row -
-# a line reading "claude" - is dropped, and so is the workspace name repeated
-# on every row. That buys the width for the branch, which gets its own row and
-# so cannot be truncated away.
-#
-# dim = false lifts the rows off the panel background. Colours are
-# Catppuccin-ish; change them to taste.
+# The workspace name repeated on every row is dropped, and so is herdr's
+# "agent" row - a line reading "claude" - because the icon already says it.
+# That buys the width for the branch, which gets its own row and so cannot be
+# truncated away. dim = false lifts the rows off the panel background.
 [ui.sidebar.agents]
 row_gap = 0
+# The app icon doubles as the activity light. herdr can only colour a token by
+# its value, and the glyph is the same whatever the agent is doing, so the
+# plugin publishes one icon token per status and populates only the matching
+# one. A token with no value is skipped when the row is drawn, so exactly one
+# of the five renders and it costs no width.
+#
+# Colours are herdr's own, from status_color():
+#   working #f9e2af yellow   blocked #f38ba8 red     done #94e2d5 teal
+#   idle    #a6e3a1 green    unknown #6c7086 grey
+#
+# This replaces herdr's state_icon, which is why it is not in the row.
 rows = [
   [
-    "state_icon",
-    { token = "$icon", fg = "#cba6f7", dim = false },
+    { token = "$icon_working", fg = "#f9e2af", dim = false },
+    { token = "$icon_blocked", fg = "#f38ba8", bold = true, dim = false },
+    { token = "$icon_done", fg = "#94e2d5", dim = false },
+    { token = "$icon_idle", fg = "#a6e3a1", dim = false },
+    { token = "$icon_unknown", fg = "#6c7086", dim = false },
     { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
   ],
   [{ token = "$branch", fg = "#a6e3a1", dim = false }],

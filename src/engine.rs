@@ -19,6 +19,9 @@ use crate::label::{self, Context};
 
 /// Identifies this plugin as the author of the pane metadata it reports.
 const TOKEN_SOURCE: &str = "herdr-tagr";
+
+/// Every agent status herdr reports, each getting its own icon token.
+const STATUSES: &[&str] = &["idle", "working", "blocked", "done", "unknown"];
 use crate::socket::Client;
 use crate::state::{Decision, State};
 
@@ -26,6 +29,9 @@ use crate::state::{Decision, State};
 pub struct Pane {
     pub pane_id: String,
     pub tab_id: String,
+    /// `idle`, `working`, `blocked`, `done` or `unknown`.
+    #[serde(default)]
+    pub agent_status: Option<String>,
     #[serde(default)]
     pub workspace_id: String,
     #[serde(default)]
@@ -113,9 +119,9 @@ pub struct Engine {
     /// tabs that already existed when the daemon started are never mistaken
     /// for ones created under its watch.
     seen_tabs: Option<BTreeSet<String>>,
-    /// Last token set reported per pane, so an idle session does not re-send
-    /// metadata that has not changed.
-    reported: HashMap<String, label::Tokens>,
+    /// Last token payload reported per pane, so an idle session does not
+    /// re-send metadata that has not changed.
+    reported: HashMap<String, serde_json::Map<String, Value>>,
     /// workspace id -> parent repository name, for linked worktrees only.
     worktrees: HashMap<String, String>,
 }
@@ -261,24 +267,37 @@ impl Engine {
             worktree_repo: self.worktrees.get(&pane.workspace_id).map(String::as_str),
         };
         let tokens = label::tokens(&ctx, &self.cfg, &mut self.git);
-        if self.reported.get(&pane.pane_id) == Some(&tokens) {
-            return;
+
+        let mut payload = serde_json::Map::new();
+        let cfg = &self.cfg.sidebar;
+        payload.insert(cfg.token_icon.clone(), json!(tokens.icon));
+        payload.insert(cfg.token_folder.clone(), json!(tokens.folder));
+        payload.insert(cfg.token_branch.clone(), json!(tokens.branch));
+
+        // herdr can only style a token by its value, and the app glyph is the
+        // same whatever the agent is doing. So the status rides on *which*
+        // token carries it: one name per status, only ever one populated, the
+        // rest null. A token with no value is skipped entirely when the row is
+        // drawn, so this costs no width and lets each status take its own
+        // colour from the sidebar layout.
+        let status = pane.agent_status.as_deref().unwrap_or("unknown");
+        for known in STATUSES {
+            let name = format!("{}_{known}", cfg.token_icon);
+            let value = (*known == status).then(|| tokens.icon.clone()).flatten();
+            payload.insert(name, json!(value));
         }
 
-        // A token that no longer applies is sent as null, which clears it -
-        // otherwise a pane that left a repository would keep showing a branch.
-        let payload = json!({
+        if self.reported.get(&pane.pane_id) == Some(&payload) {
+            return;
+        }
+        let request = json!({
             "pane_id": pane.pane_id,
             "source": TOKEN_SOURCE,
-            "tokens": {
-                self.cfg.sidebar.token_icon.as_str(): tokens.icon,
-                self.cfg.sidebar.token_folder.as_str(): tokens.folder,
-                self.cfg.sidebar.token_branch.as_str(): tokens.branch,
-            },
+            "tokens": Value::Object(payload.clone()),
         });
-        match self.client.request("pane.report_metadata", payload) {
+        match self.client.request("pane.report_metadata", request) {
             Ok(_) => {
-                self.reported.insert(pane.pane_id.clone(), tokens);
+                self.reported.insert(pane.pane_id.clone(), payload);
             }
             Err(e) => report.errors.push(e),
         }
