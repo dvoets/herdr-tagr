@@ -124,6 +124,10 @@ pub struct Engine {
     reported: HashMap<String, serde_json::Map<String, Value>>,
     /// workspace id -> parent repository name, for linked worktrees only.
     worktrees: HashMap<String, String>,
+    /// Panes whose agent was working at the last pass, which are the ones the
+    /// spinner animates.
+    working: Vec<String>,
+    frame: usize,
 }
 
 /// What a pass did, for logging and for the one-shot commands.
@@ -149,6 +153,8 @@ impl Engine {
             seen_tabs: None,
             reported: HashMap::new(),
             worktrees: HashMap::new(),
+            working: Vec::new(),
+            frame: 0,
         })
     }
 
@@ -281,9 +287,17 @@ impl Engine {
         // drawn, so this costs no width and lets each status take its own
         // colour from the sidebar layout.
         let status = pane.agent_status.as_deref().unwrap_or("unknown");
+        let spun = self.spinner_frame();
         for known in STATUSES {
             let name = format!("{}_{known}", cfg.token_icon);
-            let value = (*known == status).then(|| tokens.icon.clone()).flatten();
+            let mut value = (*known == status).then(|| tokens.icon.clone()).flatten();
+            // A working pane shows the current frame, so the pass and the
+            // animation never disagree about what that token holds.
+            if *known == "working" && value.is_some() {
+                if let Some(frame) = &spun {
+                    value = Some(frame.clone());
+                }
+            }
             payload.insert(name, json!(value));
         }
 
@@ -319,6 +333,12 @@ impl Engine {
             snap.panes.iter().map(|p| (p.pane_id.as_str(), p)).collect();
 
         if self.cfg.sidebar.report_tokens {
+            self.working = snap
+                .panes
+                .iter()
+                .filter(|p| p.agent_status.as_deref() == Some("working"))
+                .map(|p| p.pane_id.clone())
+                .collect();
             for pane in &snap.panes {
                 self.report_tokens(pane, &mut report);
             }
@@ -415,6 +435,54 @@ impl Engine {
     pub fn process_info_raw(&self, pane_id: &str) -> Result<Value, String> {
         self.client
             .request("pane.process_info", json!({ "pane_id": pane_id }))
+    }
+
+    /// The frame to show right now, or `None` when the spinner is off.
+    fn spinner_frame(&self) -> Option<String> {
+        if !self.cfg.sidebar.spinner {
+            return None;
+        }
+        let frames: Vec<char> = self.cfg.sidebar.spinner_frames.chars().collect();
+        frames
+            .get(self.frame % frames.len().max(1))
+            .map(|c| c.to_string())
+    }
+
+    /// Advances one frame and repaints the working panes.
+    ///
+    /// Only the icon token is sent, so an animation costs one small request
+    /// per working pane and nothing when nothing is working. Returns the panes
+    /// written, so their echoed events can be told apart from real ones.
+    pub fn animate(&mut self) -> Vec<String> {
+        if !self.cfg.sidebar.spinner || !self.cfg.sidebar.report_tokens || self.working.is_empty() {
+            return Vec::new();
+        }
+        self.frame = self.frame.wrapping_add(1);
+        let Some(frame) = self.spinner_frame() else {
+            return Vec::new();
+        };
+        let name = format!("{}_working", self.cfg.sidebar.token_icon);
+
+        let mut painted = Vec::new();
+        for pane_id in self.working.clone() {
+            let request = json!({
+                "pane_id": pane_id,
+                "source": TOKEN_SOURCE,
+                "tokens": { name.as_str(): frame },
+            });
+            if self.client.request("pane.report_metadata", request).is_ok() {
+                if let Some(cached) = self.reported.get_mut(&pane_id) {
+                    cached.insert(name.clone(), json!(frame));
+                }
+                painted.push(pane_id);
+            }
+        }
+        painted
+    }
+
+    pub fn spinner_interval(&self) -> Option<Duration> {
+        (self.cfg.sidebar.spinner && !self.working.is_empty())
+            .then(|| Duration::from_millis(self.cfg.sidebar.spinner_ms.max(40)))
     }
 
     pub fn apps(&self) -> &[App] {

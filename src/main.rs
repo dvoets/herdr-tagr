@@ -13,14 +13,21 @@ mod socket;
 mod state;
 mod transport;
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use engine::Engine;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Longest an animating daemon waits before looking for real work anyway.
+const HEARTBEAT_MS: u64 = 2000;
+
+/// Panes this process painted, and when, so their echoes can be ignored.
+type Painted = Arc<Mutex<HashMap<String, Instant>>>;
 
 /// Events worth recomputing on. `pane.updated` is by far the noisiest (it fires
 /// as panes produce output), which is exactly why the daemon debounces.
@@ -99,8 +106,13 @@ fn daemon() -> Result<(), String> {
     }
 
     let dirty = Arc::new(AtomicBool::new(false));
+    // Panes this process has just painted. Every metadata write echoes back as
+    // an event, so without this the spinner would wake the daemon on its own
+    // frames and drive a full pass several times a second.
+    let painted: Painted = Arc::new(Mutex::new(HashMap::new()));
     spawn_event_reader(
         Arc::clone(&dirty),
+        Arc::clone(&painted),
         debug,
         engine.cfg.general.socket_path.clone(),
     );
@@ -110,12 +122,34 @@ fn daemon() -> Result<(), String> {
     let tick = Duration::from_millis(25);
 
     loop {
-        // Wait for the event thread, or for the fallback poll to come due.
+        // Wait for the event thread, for the next animation frame, or for the
+        // fallback poll to come due.
         let mut waited = 0u64;
-        while !dirty.load(Ordering::Relaxed) {
-            thread::sleep(tick);
-            waited += tick.as_millis() as u64;
+        loop {
+            if dirty.load(Ordering::Relaxed) {
+                break;
+            }
+            if let Some(interval) = engine.spinner_interval() {
+                thread::sleep(interval);
+                let ids = engine.animate();
+                if !ids.is_empty() {
+                    let now = Instant::now();
+                    let mut painted = painted.lock().expect("painted map");
+                    for id in ids {
+                        painted.insert(id, now);
+                    }
+                }
+                waited += interval.as_millis() as u64;
+            } else {
+                thread::sleep(tick);
+                waited += tick.as_millis() as u64;
+            }
             if poll > 0 && waited >= poll {
+                break;
+            }
+            // While animating, check back often enough that a change arriving
+            // inside a frame is not left sitting.
+            if engine.spinner_interval().is_some() && waited >= HEARTBEAT_MS {
                 break;
             }
         }
@@ -149,7 +183,7 @@ fn daemon() -> Result<(), String> {
 }
 
 /// Reads the event stream forever, reconnecting with backoff if herdr restarts.
-fn spawn_event_reader(dirty: Arc<AtomicBool>, debug: bool, socket_path: String) {
+fn spawn_event_reader(dirty: Arc<AtomicBool>, painted: Painted, debug: bool, socket_path: String) {
     thread::spawn(move || {
         let mut backoff = Duration::from_millis(250);
         loop {
@@ -167,7 +201,19 @@ fn spawn_event_reader(dirty: Arc<AtomicBool>, debug: bool, socket_path: String) 
             match client.subscribe(EVENTS) {
                 Ok(events) => {
                     backoff = Duration::from_millis(250);
-                    for _ in events {
+                    for event in events {
+                        // An event about a pane we just painted is our own
+                        // spinner frame coming back; anything else is real.
+                        if let Some(pane_id) = event_pane_id(&event) {
+                            let ours = painted
+                                .lock()
+                                .expect("painted map")
+                                .get(&pane_id)
+                                .is_some_and(|at| at.elapsed() < Duration::from_millis(250));
+                            if ours {
+                                continue;
+                            }
+                        }
                         dirty.store(true, Ordering::Relaxed);
                     }
                     if debug {
@@ -186,6 +232,16 @@ fn spawn_event_reader(dirty: Arc<AtomicBool>, debug: bool, socket_path: String) 
             dirty.store(true, Ordering::Relaxed);
         }
     });
+}
+
+/// The pane an event is about, when it names one.
+fn event_pane_id(event: &serde_json::Value) -> Option<String> {
+    let data = event.get("data")?;
+    data.get("pane")
+        .and_then(|p| p.get("pane_id"))
+        .or_else(|| data.get("pane_id"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
 }
 
 fn refresh() -> Result<(), String> {

@@ -180,6 +180,16 @@ pub struct Sidebar {
     pub token_icon: String,
     pub token_folder: String,
     pub token_branch: String,
+    /// Animate the icon of a pane whose agent is working.
+    ///
+    /// herdr redraws when pane metadata changes, so a spinner means pushing a
+    /// frame on a timer. It costs one small request per working pane per
+    /// frame, and nothing at all when no agent is working.
+    pub spinner: bool,
+    /// Milliseconds per frame.
+    pub spinner_ms: u64,
+    /// The frames, one character each.
+    pub spinner_frames: String,
 }
 
 impl Default for Sidebar {
@@ -190,6 +200,11 @@ impl Default for Sidebar {
             token_icon: "icon".to_string(),
             token_folder: "folder".to_string(),
             token_branch: "branch".to_string(),
+            spinner: true,
+            spinner_ms: 120,
+            spinner_frames:
+                "\u{280b}\u{2819}\u{2839}\u{2838}\u{283c}\u{2834}\u{2826}\u{2827}\u{2807}\u{280f}"
+                    .to_string(),
         }
     }
 }

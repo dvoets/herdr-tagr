@@ -62,6 +62,43 @@ Icons name the **model provider** where Nerd Fonts has one: `cod-claude`,
 Mistral, Llama or Anthropic-as-such, so the other agents keep a distinct
 generic glyph.
 
+## The spinner
+
+A working pane animates its icon. herdr redraws when pane metadata changes, so
+a spinner means pushing a frame on a timer - there is no animation support to
+hook into.
+
+```toml
+[sidebar]
+spinner = true
+spinner_ms = 120
+spinner_frames = "\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f"
+```
+
+Cost is one small request per working pane per frame, and **nothing at all**
+while no agent is working - the timer only runs when there is something to
+animate. Measured at 8 frames a second with one working pane: 0.7% of a core,
+3.5 MB resident.
+
+That number depends on one detail. Every metadata write echoes back as a
+`pane.updated` event, so a naive spinner would wake the daemon on its own
+frames and drag it through a full recompute several times a second. The daemon
+records which panes it painted and ignores events for them for 250ms, and
+checks for real work at least every 2 seconds regardless, so a change arriving
+inside a frame is never left sitting.
+
+**The trade:** the frame replaces the provider glyph, so a spinning pane stops
+saying which model is running. The colour still says it is working. Set
+`spinner = false` to keep the mark static.
+
+Other frame sets that are present in Nerd Fonts:
+
+| | |
+|---|---|
+| `"\u25d0\u25d3\u25d1\u25d2"` | quarters |
+| `"\u2581\u2583\u2585\u2587\u2585\u2583"` | bars |
+| `"\u25dc\u25e0\u25dd\u25de\u25e1\u25df"` | arcs |
+
 ## Why `branch_indent` is not spaces
 
 herdr has no literal-text sidebar token, so padding has to come from the token
