@@ -35,7 +35,7 @@ plugin's. It is in [`config/herdr.toml`](../config/herdr.toml) to copy across.
 | `debounce_ms` | `120` | Coalescing window after a burst of herdr events before recomputing |
 | `min_interval_ms` | `250` | Floor between two full passes, so a chatty agent cannot spin the daemon |
 | `process_ttl_ms` | `1500` | How long a pane's process listing stays usable before it is re-read |
-| `poll_ms` | `0` | Fallback polling when the event stream is unavailable. `0` disables it |
+| `poll_ms` | `5000` | Fallback poll, so a missed or dropped event cannot leave a stale status on screen. `0` disables it |
 | `debug` | `false` | Log every rename to the plugin log |
 | `socket_path` | `""` | Override the herdr endpoint. Empty uses `HERDR_SOCKET_PATH`, then the platform default |
 | `rename_tabs` | `true` | Set `false` to leave the tab bar alone and use this purely as a source of sidebar metadata |

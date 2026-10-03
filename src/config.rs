@@ -33,7 +33,8 @@ pub struct General {
     pub min_interval_ms: u64,
     /// How long a pane's process listing stays usable before we re-read it.
     pub process_ttl_ms: u64,
-    /// Fallback poll when the event stream is unavailable. 0 disables it.
+    /// Fallback poll, so a missed or dropped event cannot leave the sidebar
+    /// showing a status that has moved on. 0 disables it.
     pub poll_ms: u64,
     pub debug: bool,
     /// Overrides the herdr endpoint. Empty means `HERDR_SOCKET_PATH`, which
@@ -290,7 +291,7 @@ impl Default for General {
             debounce_ms: 120,
             min_interval_ms: 250,
             process_ttl_ms: 1500,
-            poll_ms: 0,
+            poll_ms: 5000,
             debug: false,
             socket_path: String::new(),
             rename_tabs: true,
