@@ -201,3 +201,20 @@ name unless you give `matches`.
 Built-in ranks: ssh 90, editors 76-80, yazi 75, lazygit/lazydocker 70, k9s 68,
 btop 66, ncdu 65, agents 60, pagers 48-50, tmux 45, dev tooling 20-30, shell 10.
 Anything unrecognised has no rank and can never win a pane.
+
+## Jumping to the agents that want you
+
+Two plugin actions walk the queue of agents that need a person: blocked first,
+then done.
+
+| Command | Action id | Effect |
+|---|---|---|
+| `herdr-tagr next-attention` | `next-attention` | Focus the next blocked or finished agent |
+| `herdr-tagr prev-attention` | `prev-attention` | The same, backwards |
+
+Bind them with `type = "plugin_action"` and
+`command = "herdr-tagr.next-attention"`; the shipped block in
+[../config/herdr.toml](../config/herdr.toml) uses `alt+d` and `prefix+d`.
+
+Both run as one-shot commands rather than through the daemon, so they work even
+if the daemon is not running.

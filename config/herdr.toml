@@ -63,3 +63,19 @@ rows = [
   [{ token = "$folder", fg = "#cdd6f4", bold = true, dim = false }],
   [{ token = "$branch", fg = "#a6e3a1", dim = false }],
 ]
+
+# --- jump to the agents that want you (herdr-tagr) -----------------------------
+# Blocked first - an agent sitting on a question is stalled - then the ones that
+# have finished and not been looked at. Press again to walk the queue; it wraps,
+# and from a pane outside the queue the first press lands on the front of it.
+[[keys.command]]
+key = ["alt+d", "prefix+d"]
+type = "plugin_action"
+command = "herdr-tagr.next-attention"
+description = "next agent needing attention"
+
+[[keys.command]]
+key = ["alt+shift+d", "prefix+shift+d"]
+type = "plugin_action"
+command = "herdr-tagr.prev-attention"
+description = "previous agent needing attention"

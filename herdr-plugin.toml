@@ -35,6 +35,17 @@ id = "release"
 title = "Tagr: stop auto-titling this tab"
 command = ["./target/release/herdr-tagr", "release"]
 
+# Bound to a key in config/herdr.toml: walk the agents that want you.
+[[actions]]
+id = "next-attention"
+title = "Tagr: next agent needing attention"
+command = ["./target/release/herdr-tagr", "next-attention"]
+
+[[actions]]
+id = "prev-attention"
+title = "Tagr: previous agent needing attention"
+command = ["./target/release/herdr-tagr", "prev-attention"]
+
 [[actions]]
 id = "doctor"
 title = "Tagr: explain this pane's title"
