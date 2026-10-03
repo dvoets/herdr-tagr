@@ -198,6 +198,12 @@ pub struct Sidebar {
     /// Which panes scroll. Text that already fits never scrolls whatever this
     /// says.
     pub activity_scroll: ActivityScroll,
+    /// Where the line's words come from.
+    pub activity_source: ActivitySource,
+    /// Longest activity line kept, in characters, so one enormous tool
+    /// description cannot become a scroll loop that takes a minute to come
+    /// round.
+    pub activity_max: usize,
     /// Names the reported tokens are published under, referenced from herdr's
     /// sidebar layout as `$icon`, `$folder`, `$branch` and `$activity`. Rename
     /// them if they would collide with another plugin's tokens.
@@ -205,6 +211,22 @@ pub struct Sidebar {
     pub token_folder: String,
     pub token_branch: String,
     pub token_activity: String,
+}
+
+/// Where the activity line's words come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivitySource {
+    /// What the agent is doing now, read from Claude Code's session
+    /// transcript: the newest tool call, named in a few words. Falls back to
+    /// the title whenever there is nothing to read - a pane that is not
+    /// Claude, a session that has not written a transcript yet, or a format
+    /// that has moved under us.
+    #[default]
+    Transcript,
+    /// herdr's `terminal_title_stripped`: the session's subject rather than
+    /// what it is doing, which changes rarely and is often just "Claude Code".
+    Title,
 }
 
 /// Which panes animate their activity line.
@@ -238,6 +260,8 @@ impl Default for Sidebar {
             activity_ms: 220,
             activity_gap: "   \u{2022}   ".to_string(),
             activity_scroll: ActivityScroll::Working,
+            activity_source: ActivitySource::Transcript,
+            activity_max: 60,
             token_icon: "icon".to_string(),
             token_folder: "folder".to_string(),
             token_branch: "branch".to_string(),

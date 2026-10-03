@@ -162,7 +162,9 @@ is overwritten the moment you finish typing it.
 |---|---|---|
 | `report_tokens` | `true` | Publish the label's parts as pane metadata |
 | `branch_indent` | `0` | Blank columns prefixed to the branch token. `0` with the shipped three-row layout, where the folder and branch share an indent |
-| `activity` | `true` | Publish what the agent is doing, from herdr's `terminal_title_stripped`. Agent panes only |
+| `activity` | `true` | Publish what the agent is doing. Agent panes only |
+| `activity_source` | `"transcript"` | `"transcript"` reads Claude Code's session transcript for the newest tool call; `"title"` uses herdr's `terminal_title_stripped` |
+| `activity_max` | `60` | Longest line kept, in characters |
 | `activity_width` | `20` | Columns the activity text is windowed to; the socket does not expose the panel's width |
 | `activity_ms` | `220` | Milliseconds per scroll step |
 | `activity_gap` | `"   •   "` | Joins the end of the text back round to its start |

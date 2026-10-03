@@ -91,15 +91,50 @@ indent, so `0` already lines them up. The arithmetic is below.
 
 ## The activity line
 
-The first row says what the agent is *doing*, from herdr's own
-`terminal_title_stripped` - the title Claude Code sets, which is the session's
-subject:
+The first row says what the agent is *doing* right now:
 
 ```
- · Laptop performance issue
+ · Editing label.rs
    home.ai
    main
 ```
+
+### Where the words come from
+
+`activity_source = "transcript"` reads it from Claude Code's own session
+transcript. herdr hands over the agent's session id in `agent_session.value`,
+and Claude Code names its transcript file after exactly that id, so the mapping
+is **exact** rather than guessed from the working directory - which matters when
+several panes sit in the same repository.
+
+The transcript is JSONL, appended as the session runs. Only the newest
+`tool_use` is wanted, so the first read starts 64 KB from the end and later
+reads resume where the last one stopped: a session running for hours costs the
+same as one that just started. A `Bash` call already carries a written
+description, which is why those read best; the rest get a verb and their object:
+
+| Tool | Line |
+|---|---|
+| `Bash` | its own `description` - "Run the suite" |
+| `Read` / `Edit` / `Write` | "Reading label.rs" |
+| `Grep` / `Glob` | "Searching pattern" |
+| `Task` | "Delegating ..." |
+| anything unrecognised | the tool's own name |
+
+A subagent writes into the same transcript as the session that spawned it, so
+lines marked `isSidechain` are skipped - a fork's work is not what the pane is
+doing.
+
+This leans on a format that is Claude Code's internal business and can change
+without notice, so every failure is soft: a line that will not parse, a field
+that has moved, a pane that is not Claude, or a session that has not written its
+transcript yet all fall back to `terminal_title_stripped`. `activity_source =
+"title"` uses that field directly.
+
+Two things to expect. The line **lags by one pass**, because it is read when
+herdr sends an event rather than when the transcript is written. And once the
+agent stops working it shows the session title instead, since the last tool call
+it ran is stale by then.
 
 Only agent panes get it. A plain shell's title is its prompt
 (`daan@host:~/Downloads`), which would fill the row with noise, so panes whose
