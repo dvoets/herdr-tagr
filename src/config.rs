@@ -211,12 +211,14 @@ pub struct Sidebar {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ActivityScroll {
-    /// Every pane whose text overflows, idle ones included. The text is most
-    /// worth reading on a pane you are not watching, which is the case for
-    /// scrolling it; the cost is a write per pane per step.
-    #[default]
+    /// Every pane whose text overflows, idle ones included. Costs a write per
+    /// pane per step, and every write makes herdr redraw - about 2 points of
+    /// one core per scrolling pane.
     Always,
-    /// Only panes whose agent is working.
+    /// Only panes whose agent is working. The row still exists on an idle
+    /// pane, so an entry keeps its height and the panel never reflows as
+    /// agents start and stop; the line just sits still, truncated by herdr.
+    #[default]
     Working,
     /// Nobody: the line is published once, and herdr truncates it.
     Off,
@@ -235,7 +237,7 @@ impl Default for Sidebar {
             activity_width: 20,
             activity_ms: 220,
             activity_gap: "   \u{2022}   ".to_string(),
-            activity_scroll: ActivityScroll::Always,
+            activity_scroll: ActivityScroll::Working,
             token_icon: "icon".to_string(),
             token_folder: "folder".to_string(),
             token_branch: "branch".to_string(),

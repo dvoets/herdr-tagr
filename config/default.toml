@@ -176,10 +176,15 @@ activity_gap = "   \u2022   "
 
 # Which panes scroll. Text that already fits never scrolls whatever this says.
 #
-#   "always" (default)  every pane whose text overflows, idle ones included
-#   "working"           only panes whose agent is working
-#   "off"               nobody: published once, and herdr truncates it
-activity_scroll = "always"
+#   "working" (default)  only panes whose agent is working
+#   "always"             every pane whose text overflows, idle ones included
+#   "off"                nobody: published once, and herdr truncates it
+#
+# The row itself exists either way, so an entry keeps its height and the panel
+# does not reflow as agents start and stop - an idle line just sits still,
+# truncated by herdr. Every scroll step is a write that makes herdr redraw,
+# which is why "always" is not the default: see docs/sidebar.md.
+activity_scroll = "working"
 
 # Names the tokens are published under, referenced from herdr's sidebar layout
 # as $icon, $folder and $branch. Rename them if they would collide with another
