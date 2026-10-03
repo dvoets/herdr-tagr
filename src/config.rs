@@ -180,27 +180,66 @@ pub struct Sidebar {
     /// glyph there costs width without saying anything new. Set to "" to drop
     /// it.
     pub folder_glyph: String,
+    /// Publishes what the agent is doing as its own token, taken from herdr's
+    /// `terminal_title_stripped`. Only agent panes get it: a plain shell's
+    /// title is its prompt, which says nothing worth a row.
+    pub activity: bool,
+    /// Columns the activity text is windowed to. The socket does not expose
+    /// the sidebar's width, so it has to be told: herdr's `sidebar_width`
+    /// defaults to 26, less 1 for the row indent, 1 for the icon, 3 for the
+    /// separator and 1 for the scrollbar.
+    pub activity_width: usize,
+    /// Milliseconds per scroll step. Every step is one metadata write per
+    /// scrolling pane, so this is the knob that decides the cost.
+    pub activity_ms: u64,
+    /// Joins the end of the text back round to its start as it wraps, so a
+    /// scrolling line reads as a loop rather than a jump.
+    pub activity_gap: String,
+    /// Which panes scroll. Text that already fits never scrolls whatever this
+    /// says.
+    pub activity_scroll: ActivityScroll,
     /// Names the reported tokens are published under, referenced from herdr's
-    /// sidebar layout as `$icon`, `$folder` and `$branch`. Rename them if they
-    /// would collide with another plugin's tokens.
+    /// sidebar layout as `$icon`, `$folder`, `$branch` and `$activity`. Rename
+    /// them if they would collide with another plugin's tokens.
     pub token_icon: String,
     pub token_folder: String,
     pub token_branch: String,
+    pub token_activity: String,
+}
+
+/// Which panes animate their activity line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityScroll {
+    /// Every pane whose text overflows, idle ones included. The text is most
+    /// worth reading on a pane you are not watching, which is the case for
+    /// scrolling it; the cost is a write per pane per step.
+    #[default]
+    Always,
+    /// Only panes whose agent is working.
+    Working,
+    /// Nobody: the line is published once, and herdr truncates it.
+    Off,
 }
 
 impl Default for Sidebar {
     fn default() -> Self {
         Self {
             report_tokens: true,
-            // 2 puts the branch glyph and name in the same columns as the
-            // folder glyph and name above: see config/default.toml for the
-            // column arithmetic this comes from.
-            branch_indent: 2,
+            // The folder sits on its own row now, at the same indent as the
+            // branch, so no padding is needed to line the two up.
+            branch_indent: 0,
             // U+F07B nf-fa-folder, verified present in Hack Nerd Font.
             folder_glyph: "\u{f07b}".to_string(),
+            activity: true,
+            activity_width: 20,
+            activity_ms: 220,
+            activity_gap: "   \u{2022}   ".to_string(),
+            activity_scroll: ActivityScroll::Always,
             token_icon: "icon".to_string(),
             token_folder: "folder".to_string(),
             token_branch: "branch".to_string(),
+            token_activity: "activity".to_string(),
         }
     }
 }

@@ -138,8 +138,9 @@ panel lay them out:
 ```
 before                        after
 --------------------------    --------------------------
-✓ home ·  herdr-tagr (...      ·  herdr-tagr
-    claude                          main
+✓ home ·  herdr-tagr (...      · Herder terminal rede…
+    claude                        herdr-tagr
+                                  main
 ```
 
 The icon doubles as the activity light, taking herdr's status colours - yellow
@@ -147,6 +148,12 @@ working, red blocked, teal done, green idle - so the separate state dot goes
 too. The folder leads with a `` of its own and the branch sits directly
 under it, glyph beneath glyph and name beneath name. The folder glyph is
 sidebar-only, since a tab label already starts with the app icon.
+
+The first row says what the agent is *doing*, from the title Claude Code sets.
+That text is routinely wider than the panel, so rather than let herdr truncate
+it the plugin scrolls it like an old LED sign. It costs herdr a redraw per step,
+so `activity_scroll` takes `"working"` or `"off"` as well as the shipped
+`"always"` - see [docs/sidebar.md](docs/sidebar.md) for the measurements.
 
 Setup and the column arithmetic: [docs/sidebar.md](docs/sidebar.md).
 

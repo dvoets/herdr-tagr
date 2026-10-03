@@ -560,15 +560,11 @@ mod tests {
 
     #[test]
     fn the_shipped_indent_lines_the_branch_up_under_the_folder() {
-        // herdr's own layout numbers, from src/client/shell/agent_sidebar.rs
-        // and src/ui/sidebar/tokens.rs: the first row of an entry is indented
-        // by 1 and continuation rows by 3, and tokens are joined with " \u00b7 "
-        // (3 columns) unless the token before is herdr's state_icon - which
-        // this row replaces, so the wide separator applies.
-        const ROW1_INDENT: usize = 1;
-        const ROW2_INDENT: usize = 3;
-        const SEPARATOR: usize = 3;
-        const ICON: usize = 1;
+        // herdr's own layout numbers, from src/client/shell/agent_sidebar.rs:
+        // the first row of an entry is indented by 1 and continuation rows by
+        // 3. With the three-row layout the folder and branch are each alone on
+        // a continuation row, so neither pays for an icon or a separator.
+        const CONTINUATION_INDENT: usize = 3;
 
         let cfg = Config::default();
         let mut git = Cache::default();
@@ -581,7 +577,6 @@ mod tests {
         let folder = t.folder.expect("a folder");
         let branch = t.branch.expect("herdr-tagr is a git repository");
 
-        // Where each token's glyph and name actually land on screen.
         let offset_of_name = |token: &str| {
             token
                 .char_indices()
@@ -589,14 +584,12 @@ mod tests {
                 .map(|(i, _)| token[..i].chars().count() + 1)
                 .expect("glyph then space then name")
         };
-        let folder_glyph_col = ROW1_INDENT + ICON + SEPARATOR;
+        let folder_glyph_col = CONTINUATION_INDENT;
         let folder_name_col = folder_glyph_col + offset_of_name(&folder);
-        // The branch token carries its own padding, so its start is the row
-        // indent and the padding counts as part of the token.
-        let branch_glyph_col = ROW2_INDENT + cfg.sidebar.branch_indent;
-        let branch_name_col = ROW2_INDENT
-            + offset_of_name(branch.trim_start_matches('\u{2800}'))
-            + cfg.sidebar.branch_indent;
+        let branch_glyph_col = CONTINUATION_INDENT + cfg.sidebar.branch_indent;
+        let branch_name_col = CONTINUATION_INDENT
+            + cfg.sidebar.branch_indent
+            + offset_of_name(branch.trim_start_matches('\u{2800}'));
 
         assert_eq!(
             folder_glyph_col, branch_glyph_col,

@@ -131,23 +131,17 @@ report_tokens = true
 # BRAILLE PATTERN BLANK, because herdr trims real whitespace off token values.
 #
 # herdr indents the first row of an agent entry by 1 column and every
-# continuation row by 3, and separates tokens with " \u00b7 ". With the layout in
-# config/herdr.toml:
+# continuation row by 3. With the three-row layout in config/herdr.toml the
+# folder and the branch are each alone on a continuation row:
 #
-#   row 1   indent 1 + icon 1 + " \u00b7 " 3   -> $folder starts at column 5
-#   row 2   indent 3 + pad                  -> $branch starts at 3 + pad
+#   row 1   indent 1 + icon 1 + " \u00b7 " 3   -> $activity starts at column 5
+#   row 2   indent 3                        -> $folder starts at column 3
+#   row 3   indent 3 + pad                  -> $branch starts at 3 + pad
 #
-# The separator is 3 columns, not 1: herdr narrows it to " " only after its own
-# state_icon token (src/ui/sidebar/tokens.rs), and this row uses the plugin's
-# tokens instead.
-#
-# Both tokens have the same shape - glyph, space, name - so one value lines up
-# both halves. At 2 the branch glyph sits in column 5 under the folder glyph,
-# and the branch name in column 7 under the folder name.
-#
-# Put something back in front of the icon - herdr's state_icon, or the workspace
-# name - and raise this by that token's width plus its separator.
-branch_indent = 2
+# so 0 lines the folder and branch up: both tokens are a glyph, a space and a
+# name, at the same indent. Raise it only if you move the folder back up beside
+# the icon, where the icon and its separator push it 2 columns right.
+branch_indent = 0
 
 # Leads the folder token in the sidebar, so the folder carries a mark of its own
 # the way the branch row does. U+F07B nf-fa-folder, verified present in Hack
@@ -159,12 +153,41 @@ branch_indent = 2
 # not already say.
 folder_glyph = "\uf07b"
 
+# Publishes what the agent is doing as its own token, taken from herdr's
+# terminal_title_stripped - the title Claude Code sets, which is the session's
+# subject ("Laptop performance issue"). Only agent panes get it: a plain
+# shell's title is its prompt, which says nothing worth a row.
+activity = true
+
+# Columns the activity text is windowed to. The socket does not expose the
+# sidebar's width, so it has to be told: herdr's sidebar_width defaults to 26,
+# less 1 for the row indent, 1 for the icon, 3 for the separator and 1 for the
+# scrollbar. Lower it if you widened the panel's other rows.
+activity_width = 20
+
+# Milliseconds per scroll step. Every step is one metadata write per scrolling
+# pane, so this is the knob that decides the cost - and nothing is written at
+# all while every line fits.
+activity_ms = 220
+
+# Joins the end of the text back round to its start as it wraps, so a scrolling
+# line reads as a loop rather than a jump. U+2022 BULLET.
+activity_gap = "   \u2022   "
+
+# Which panes scroll. Text that already fits never scrolls whatever this says.
+#
+#   "always" (default)  every pane whose text overflows, idle ones included
+#   "working"           only panes whose agent is working
+#   "off"               nobody: published once, and herdr truncates it
+activity_scroll = "always"
+
 # Names the tokens are published under, referenced from herdr's sidebar layout
 # as $icon, $folder and $branch. Rename them if they would collide with another
 # plugin's tokens.
 token_icon = "icon"
 token_folder = "folder"
 token_branch = "branch"
+token_activity = "activity"
 
 [ssh]
 enabled = true
