@@ -85,9 +85,69 @@ Because the glyph lives *inside* the `$folder` token, it takes that token's
 colour and weight from the layout rather than having one of its own.
 
 It also makes `$folder` and `$branch` the same shape - glyph, space, name - so a
-single `branch_indent` lines up both halves. `2` is the shipped value, and puts
-the branch glyph under the folder glyph and the branch name under the folder
-name. The arithmetic is below.
+single `branch_indent` lines up both halves. With the shipped three-row layout
+the folder and the branch each sit alone on a continuation row, at the same
+indent, so `0` already lines them up. The arithmetic is below.
+
+## The activity line
+
+The first row says what the agent is *doing*, from herdr's own
+`terminal_title_stripped` - the title Claude Code sets, which is the session's
+subject:
+
+```
+ · Laptop performance issue
+   home.ai
+   main
+```
+
+Only agent panes get it. A plain shell's title is its prompt
+(`daan@host:~/Downloads`), which would fill the row with noise, so panes whose
+`agent_status` is `unknown` publish no activity token at all - and a row whose
+only token is missing is dropped rather than rendered blank.
+
+### Scrolling
+
+The text is routinely wider than the panel, and herdr's own answer is to
+truncate with `…`. Instead the plugin windows it to `activity_width` and
+scrolls that window one column per `activity_ms`, wrapping through
+`activity_gap` so it reads as a loop:
+
+```
+|op performance issue|
+|p performance issue⠀|
+|⠀performance issue ⠀|
+|erformance issue   •|
+|rformance issue   •⠀|
+```
+
+Two details matter. Text that already fits is published **untouched**, so a
+short line never jitters. And a frame whose window lands on a space has that
+space replaced with U+2800, because herdr trims whitespace off token values -
+without it the line would lose a column and stutter as it scrolled.
+
+Nothing is written while every line fits: `activity_interval()` returns `None`
+and the daemon goes back to waiting on events.
+
+### What it costs
+
+Every step is one `pane.report_metadata` write per scrolling pane, and each one
+makes herdr redraw. Measured on an 8-agent session with 4 lines overflowing, at
+the shipped 220ms:
+
+| | herdr | plugin |
+|---|---|---|
+| `activity_scroll = "off"` | 17% of one core | 1% |
+| `activity_scroll = "always"` | 25% of one core | 1% |
+
+So roughly 2 points of one core per scrolling pane, and it lands on **herdr**,
+not the plugin - the plugin itself stays at 1% and 3 MB. Those figures are noisy,
+because an active agent's own output drives redraws independently; treat them as
+an order of magnitude. Set `activity_scroll = "working"` to pay it only for
+panes that are busy, or `"off"` to go back to herdr's ellipsis.
+
+Raising `activity_ms` helps less than it looks: 450ms measured 23% against
+220ms's 25%, so the per-redraw cost is not what dominates.
 
 ## Why `branch_indent` is not spaces
 
@@ -106,13 +166,15 @@ herdr indents the **first** row of an agent entry by 1 column and every
 shipped layout:
 
 ```
-row 1   indent 1 + icon 1 + " · " 3          -> folder starts at column 5
-row 2   indent 3 + pad + glyph 1 + space 1   -> name starts at 5 + pad
+row 1   indent 1 + icon 1 + " · " 3   -> $activity starts at column 5
+row 2   indent 3                        -> $folder starts at column 3
+row 3   indent 3 + pad                  -> $branch starts at 3 + pad
 ```
 
-so `branch_indent = 0` lines them up. Put something back in front of the icon -
-`state_icon`, or the workspace name - and raise it by that token's width plus 3
-for its separator.
+Both `$folder` and `$branch` are a glyph, a space and a name, and rows 2 and 3
+share an indent, so `branch_indent = 0` lines them up. Move the folder back up
+beside the icon and it needs 2, because the icon and its separator push that row
+2 columns right.
 
 ## Empty rows
 

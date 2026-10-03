@@ -36,6 +36,11 @@ row_gap = 0
 #   idle    #a6e3a1 green    unknown #6c7086 grey
 #
 # This replaces herdr's state_icon, which is why it is not in the row.
+#
+# Three rows per agent: what it is doing, where it is, and which branch. The
+# activity line leads the entry because herdr indents the first row by 1 and
+# every later row by 3, which puts the folder and the branch at the same indent
+# and so lines them up with no padding (sidebar.branch_indent = 0).
 rows = [
   [
     { token = "$icon_working", fg = "#f9e2af", dim = false },
@@ -43,9 +48,13 @@ rows = [
     { token = "$icon_done", fg = "#94e2d5", dim = false },
     { token = "$icon_idle", fg = "#a6e3a1", dim = false },
     { token = "$icon_unknown", fg = "#6c7086", dim = false },
-    # $folder leads with the plugin's folder_glyph, so the glyph takes this
-    # token's colour and weight rather than having its own.
-    { token = "$folder", fg = "#cdd6f4", bold = true, dim = false },
+    # What the agent is doing, from herdr's own terminal_title_stripped. The
+    # plugin windows it to sidebar.activity_width and scrolls it, because the
+    # text is routinely wider than the panel.
+    { token = "$activity", fg = "#9399b2", dim = false },
   ],
+  # $folder leads with the plugin's folder_glyph, so the glyph takes this
+  # token's colour and weight rather than having its own.
+  [{ token = "$folder", fg = "#cdd6f4", bold = true, dim = false }],
   [{ token = "$branch", fg = "#a6e3a1", dim = false }],
 ]

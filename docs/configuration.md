@@ -161,7 +161,13 @@ is overwritten the moment you finish typing it.
 | Key | Default | What it does |
 |---|---|---|
 | `report_tokens` | `true` | Publish the label's parts as pane metadata |
-| `branch_indent` | `2` | Blank columns prefixed to the branch token, putting its glyph and name in the same columns as the folder's above |
+| `branch_indent` | `0` | Blank columns prefixed to the branch token. `0` with the shipped three-row layout, where the folder and branch share an indent |
+| `activity` | `true` | Publish what the agent is doing, from herdr's `terminal_title_stripped`. Agent panes only |
+| `activity_width` | `20` | Columns the activity text is windowed to; the socket does not expose the panel's width |
+| `activity_ms` | `220` | Milliseconds per scroll step |
+| `activity_gap` | `"   •   "` | Joins the end of the text back round to its start |
+| `activity_scroll` | `"always"` | `"always"`, `"working"` or `"off"`. Text that fits never scrolls |
+| `token_activity` | `"activity"` | Name the activity line is published under |
 | `folder_glyph` | `` | Glyph leading the folder token. Sidebar only; the tab label is untouched. `""` drops it |
 | `token_icon` | `"icon"` | Base name for the icon. Also publishes `<name>_idle`, `_working`, `_blocked`, `_done` and `_unknown`, of which only the current status is populated |
 | `token_folder` | `"folder"` | Name the folder is published under |

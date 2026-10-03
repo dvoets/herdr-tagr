@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::config::Config;
+use crate::config::{ActivityScroll, Config};
 use crate::detect::{self, Detected, ProcessInfo};
 use crate::git;
 use crate::icons::{self, App};
@@ -124,6 +124,49 @@ pub struct Engine {
     reported: HashMap<String, serde_json::Map<String, Value>>,
     /// workspace id -> parent repository name, for linked worktrees only.
     worktrees: HashMap<String, String>,
+    /// Scrolling activity line per pane, keyed by pane id.
+    marquees: HashMap<String, Marquee>,
+}
+
+/// One pane's activity line and where its window currently sits.
+struct Marquee {
+    /// The whole text, unwindowed.
+    text: String,
+    /// Characters the window is shifted by, wrapping at `text + gap`.
+    offset: usize,
+    /// Whether this pane is allowed to animate: the text overflows the window
+    /// and `activity_scroll` admits its status.
+    scrolls: bool,
+}
+
+/// The slice of `text` visible at `offset`, or the whole of it when it fits.
+///
+/// Text that fits is returned untouched, so a short line never jitters. A
+/// longer one is treated as a ring - the text, then `gap`, then the text again
+/// - and `width` characters are taken from `offset` round that ring.
+///
+/// Leading and trailing spaces become U+2800 BRAILLE PATTERN BLANK, because
+/// herdr trims whitespace off token values: without this every frame whose
+/// window happens to start or end on a space would lose a column and the line
+/// would stutter as it scrolled.
+fn window(text: &str, width: usize, offset: usize, gap: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    if width == 0 || chars.len() <= width {
+        return text.to_string();
+    }
+    let ring: Vec<char> = chars.iter().copied().chain(gap.chars()).collect();
+    let frame: String = (0..width)
+        .map(|i| ring[(offset + i) % ring.len()])
+        .collect();
+    let mut out = frame;
+    if out.starts_with(' ') {
+        out = format!("\u{2800}{}", &out[1..]);
+    }
+    if out.ends_with(' ') {
+        out.pop();
+        out.push('\u{2800}');
+    }
+    out
 }
 
 /// What a pass did, for logging and for the one-shot commands.
@@ -149,6 +192,7 @@ impl Engine {
             seen_tabs: None,
             reported: HashMap::new(),
             worktrees: HashMap::new(),
+            marquees: HashMap::new(),
         })
     }
 
@@ -267,6 +311,13 @@ impl Engine {
             worktree_repo: self.worktrees.get(&pane.workspace_id).map(String::as_str),
         };
         let tokens = label::tokens(&ctx, &self.cfg, &mut self.git);
+        // Before `cfg` borrows self: this updates the pane's marquee.
+        let activity = self
+            .cfg
+            .sidebar
+            .activity
+            .then(|| self.activity_frame(pane))
+            .flatten();
 
         let mut payload = serde_json::Map::new();
         let cfg = &self.cfg.sidebar;
@@ -287,6 +338,10 @@ impl Engine {
             payload.insert(name, json!(value));
         }
 
+        if cfg.activity {
+            payload.insert(cfg.token_activity.clone(), json!(activity));
+        }
+
         if self.reported.get(&pane.pane_id) == Some(&payload) {
             return;
         }
@@ -301,6 +356,118 @@ impl Engine {
             }
             Err(e) => report.errors.push(e),
         }
+    }
+
+    /// The activity line for a pane right now, updating its marquee.
+    ///
+    /// `None` for anything that is not an agent: a plain shell's title is its
+    /// prompt (`daan@host:~/Downloads`), which would fill the row with noise.
+    fn activity_frame(&mut self, pane: &Pane) -> Option<String> {
+        let cfg = &self.cfg.sidebar;
+        let status = pane.agent_status.as_deref().unwrap_or("unknown");
+        let is_agent = status != "unknown";
+        let text = pane
+            .terminal_title_stripped
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .filter(|_| is_agent);
+
+        let Some(text) = text else {
+            self.marquees.remove(&pane.pane_id);
+            return None;
+        };
+
+        let overflows = text.chars().count() > cfg.activity_width;
+        let scrolls = overflows
+            && match cfg.activity_scroll {
+                ActivityScroll::Always => true,
+                ActivityScroll::Working => status == "working",
+                ActivityScroll::Off => false,
+            };
+
+        let entry = self
+            .marquees
+            .entry(pane.pane_id.clone())
+            .or_insert_with(|| Marquee {
+                text: text.to_string(),
+                offset: 0,
+                scrolls,
+            });
+        // A new title starts from the left rather than wherever the old one
+        // happened to have scrolled to.
+        if entry.text != text {
+            entry.text = text.to_string();
+            entry.offset = 0;
+        }
+        entry.scrolls = scrolls;
+
+        Some(window(
+            &entry.text,
+            cfg.activity_width,
+            entry.offset,
+            &cfg.activity_gap,
+        ))
+    }
+
+    /// How long until the next scroll step, or `None` when nothing is
+    /// scrolling - in which case the daemon goes back to waiting on events and
+    /// costs nothing.
+    pub fn activity_interval(&self) -> Option<Duration> {
+        let cfg = &self.cfg.sidebar;
+        if !cfg.activity || cfg.activity_scroll == ActivityScroll::Off {
+            return None;
+        }
+        self.marquees
+            .values()
+            .any(|m| m.scrolls)
+            .then(|| Duration::from_millis(cfg.activity_ms.max(40)))
+    }
+
+    /// Advances every scrolling pane by one column and writes just that one
+    /// token, returning the panes written so their echoes can be ignored.
+    ///
+    /// Deliberately does not take a snapshot: a frame several times a second
+    /// must not cost a round trip for the whole session.
+    pub fn animate(&mut self) -> Vec<String> {
+        let (width, gap, token) = {
+            let cfg = &self.cfg.sidebar;
+            (
+                cfg.activity_width,
+                cfg.activity_gap.clone(),
+                cfg.token_activity.clone(),
+            )
+        };
+        let mut frames: Vec<(String, String)> = Vec::new();
+        for (pane_id, marquee) in self.marquees.iter_mut() {
+            if !marquee.scrolls {
+                continue;
+            }
+            let ring = marquee.text.chars().count() + gap.chars().count();
+            marquee.offset = (marquee.offset + 1) % ring.max(1);
+            frames.push((
+                pane_id.clone(),
+                window(&marquee.text, width, marquee.offset, &gap),
+            ));
+        }
+
+        let mut painted = Vec::new();
+        for (pane_id, frame) in frames {
+            let request = json!({
+                "pane_id": pane_id,
+                "source": TOKEN_SOURCE,
+                "tokens": { token.clone(): frame.clone() },
+            });
+            if self.client.request("pane.report_metadata", request).is_ok() {
+                // Keep the cached payload honest, so the next full pass does
+                // not think the token still holds the frame it last published.
+                if let Some(cached) = self.reported.get_mut(&pane_id) {
+                    cached.insert(token.clone(), json!(frame));
+                }
+                painted.push(pane_id);
+            }
+        }
+        painted
     }
 
     /// Recomputes every tab and renames the ones that need it.
@@ -429,4 +596,61 @@ impl Engine {
 /// Newest mtime across every configuration layer.
 fn config_mtime() -> Option<std::time::SystemTime> {
     Config::stamp()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GAP: &str = "   \u{2022}   ";
+
+    #[test]
+    fn text_that_fits_is_left_alone() {
+        // No padding, no windowing: a short line must never jitter.
+        assert_eq!(window("main", 20, 0, GAP), "main");
+        assert_eq!(window("exactly ten", 11, 0, GAP), "exactly ten");
+    }
+
+    #[test]
+    fn a_long_line_scrolls_one_column_at_a_time() {
+        let text = "Herder terminal redesign brainstorm";
+        let a = window(text, 20, 0, GAP);
+        let b = window(text, 20, 1, GAP);
+        assert_eq!(a.chars().count(), 20);
+        assert_eq!(b.chars().count(), 20);
+        assert_eq!(a, "Herder terminal redе".replace('е', "e"));
+        // One column along: the frame is the previous one shifted left.
+        assert_eq!(b.chars().next(), a.chars().nth(1));
+    }
+
+    #[test]
+    fn the_window_wraps_through_the_gap_back_to_the_start() {
+        let text = "0123456789";
+        let ring = text.chars().count() + GAP.chars().count();
+        // A full lap returns to where it started.
+        assert_eq!(window(text, 5, 0, GAP), window(text, 5, ring, GAP));
+        // Somewhere in the lap the gap bullet is visible.
+        let seen: String = (0..ring).map(|o| window(text, 5, o, GAP)).collect();
+        assert!(seen.contains('\u{2022}'), "the gap never appeared");
+    }
+
+    #[test]
+    fn edge_spaces_become_braille_blanks() {
+        // herdr trims whitespace off token values, so a frame that starts or
+        // ends on a space would lose a column and the line would stutter.
+        let text = "alpha beta gamma delta";
+        for offset in 0..text.chars().count() {
+            let frame = window(text, 8, offset, GAP);
+            assert!(
+                !frame.starts_with(' ') && !frame.ends_with(' '),
+                "offset {offset} gave {frame:?}, which herdr would trim"
+            );
+            assert_eq!(frame.chars().count(), 8, "offset {offset} changed width");
+        }
+    }
+
+    #[test]
+    fn a_zero_width_window_is_not_a_panic() {
+        assert_eq!(window("anything", 0, 7, GAP), "anything");
+    }
 }
