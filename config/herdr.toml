@@ -32,12 +32,13 @@ row_gap = 0
 # of the five renders and it costs no width.
 #
 # Colours are herdr's own, from status_color():
-#   working #f9e2af yellow   blocked #f38ba8 red     done #cba6f7 mauve
+#   working #f9e2af yellow   blocked #f38ba8 red     done #89dceb sky
 #   idle    #a6e3a1 green    unknown #6c7086 grey
 #
-# done is mauve and bold rather than a second green: it means finished and not
-# yet looked at, so it has to be unmistakable against idle. Teal sat about 40
-# degrees of hue from idle green and read as "a slightly different green".
+# done is sky and bold rather than a second green: it means finished and not yet
+# looked at, so it has to be unmistakable against idle. Teal sat about 54 of the
+# 360 degrees of hue from idle green and read as "a slightly different green";
+# sky is 74 away and keeps the family, where mauve at 174 left it entirely.
 #
 # This replaces herdr's state_icon, which is why it is not in the row.
 #
@@ -49,7 +50,7 @@ rows = [
   [
     { token = "$icon_working", fg = "#f9e2af", dim = false },
     { token = "$icon_blocked", fg = "#f38ba8", bold = true, dim = false },
-    { token = "$icon_done", fg = "#cba6f7", bold = true, dim = false },
+    { token = "$icon_done", fg = "#89dceb", bold = true, dim = false },
     { token = "$icon_idle", fg = "#a6e3a1", dim = false },
     { token = "$icon_unknown", fg = "#6c7086", dim = false },
     # What the agent is doing, from herdr's own terminal_title_stripped. The

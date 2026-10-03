@@ -47,7 +47,7 @@ its own colour in the layout - herdr's own, from `status_color()`:
 |---|---|---|
 | working | `#f9e2af` yellow | `●` filled |
 | blocked | `#f38ba8` red | `●` filled |
-| done | `#cba6f7` mauve, bold | `●` filled |
+| done | `#89dceb` sky, bold | `●` filled |
 | idle | `#a6e3a1` green | `○` hollow |
 | unknown | `#6c7086` grey | `·` small |
 
