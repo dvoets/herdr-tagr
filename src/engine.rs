@@ -289,6 +289,7 @@ impl Engine {
         let status = pane.agent_status.as_deref().unwrap_or("unknown");
         let working = status == "working";
         let pulse = cfg.spinner && cfg.spinner_style == SpinnerStyle::Pulse;
+        let beside = cfg.spinner && cfg.spinner_style == SpinnerStyle::Beside;
 
         for known in STATUSES {
             let name = format!("{}_{known}", cfg.token_icon);
@@ -297,12 +298,21 @@ impl Engine {
                 if pulse {
                     // The shade tokens below carry it instead.
                     value = None;
-                } else if let Some(frame) = self.spinner_frame() {
-                    value = Some(frame);
+                } else if !beside {
+                    if let Some(frame) = self.spinner_frame() {
+                        value = Some(frame);
+                    }
                 }
             }
             payload.insert(name, json!(value));
         }
+
+        // A spinner of its own, beside the mark, present only while working so
+        // an idle row is no wider than before.
+        payload.insert(
+            format!("{}_spin", cfg.token_icon),
+            json!((beside && working).then(|| self.spinner_frame()).flatten()),
+        );
 
         // Pulse keeps the provider glyph and moves it between tokens that the
         // sidebar paints in different shades, so the mark stays readable while
@@ -473,7 +483,10 @@ impl Engine {
         let cfg = &self.cfg.sidebar;
 
         // Which token names change, and what each should hold now.
-        let updates: Vec<(String, Option<String>)> = if cfg.spinner_style == SpinnerStyle::Pulse {
+        let updates: Vec<(String, Option<String>)> = if cfg.spinner_style == SpinnerStyle::Beside {
+            // Only the spin cell moves; the provider mark beside it is static.
+            vec![(format!("{}_spin", cfg.token_icon), self.spinner_frame())]
+        } else if cfg.spinner_style == SpinnerStyle::Pulse {
             let lit = self.pulse_step();
             (0..self.pulse_steps())
                 .map(|step| {

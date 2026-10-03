@@ -166,15 +166,22 @@ spinner_ms = 180
 
 # How a working pane animates.
 #
-#   "pulse"  (default)  keep the provider glyph and cycle its colour, so a
-#                       working pane still says which model is running
+#   "beside" (default)  a spinner in its own cell next to the provider glyph,
+#                       which stays put. The only way to get real motion
+#                       without losing the mark: a brand glyph cannot rotate,
+#                       because a terminal draws one fixed glyph per cell and
+#                       the font carries no rotated variants. The spin token
+#                       exists only while working, so idle rows keep their
+#                       width.
+#   "pulse"             keep the glyph and cycle its colour instead - motion
+#                       without spending a column
 #   "frames"            replace the glyph with a spinner frame
 #
 # herdr cannot recolour a token on its own, so pulse works by moving the glyph
 # between tokens that the sidebar layout paints in different shades. Each step
 # is a token named <token_icon>_working_<n>, and config/herdr.toml colours them
 # bright, mid, dim, mid - which reads as breathing.
-spinner_style = "pulse"
+spinner_style = "beside"
 # Shades in the cycle, 2 to 4.
 pulse_steps = 4
 

@@ -200,6 +200,13 @@ pub struct Sidebar {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SpinnerStyle {
+    /// A spinner in its own cell beside the provider glyph, which stays put.
+    ///
+    /// The only way to get real motion without losing the mark: a brand glyph
+    /// cannot rotate, because the terminal draws one fixed glyph per cell and
+    /// the font carries no rotated variants. The spinner token only exists
+    /// while a pane is working, so idle rows keep their width.
+    Beside,
     /// Keep the provider glyph and cycle its colour, so a working pane still
     /// says which model is running.
     Pulse,
@@ -220,7 +227,7 @@ impl Default for Sidebar {
             spinner_frames:
                 "\u{280b}\u{2819}\u{2839}\u{2838}\u{283c}\u{2834}\u{2826}\u{2827}\u{2807}\u{280f}"
                     .to_string(),
-            spinner_style: SpinnerStyle::Pulse,
+            spinner_style: SpinnerStyle::Beside,
             pulse_steps: 4,
         }
     }

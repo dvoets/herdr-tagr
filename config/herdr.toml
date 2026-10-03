@@ -35,7 +35,13 @@ row_gap = 0
 #   working #f9e2af yellow   blocked #f38ba8 red     done #94e2d5 teal
 #   idle    #a6e3a1 green    unknown #6c7086 grey
 #
-# A working pane breathes instead of sitting still. herdr cannot recolour a
+# A working pane spins. $icon_spin is a spinner in its own cell, present only
+# while the pane is working, so an idle row is no wider than before. The
+# provider glyph sits beside it and never changes, so the row keeps saying
+# which model is running.
+#
+# With spinner_style = "pulse" the spin cell is never populated and the mark
+# breathes instead: herdr cannot recolour a
 # token on its own, so the plugin moves the provider glyph between the four
 # _working_N tokens below, which are the same yellow at decreasing brightness -
 # bright, mid, dim, mid. The glyph never changes, so the pane still says which
@@ -45,6 +51,7 @@ row_gap = 0
 # This replaces herdr's state_icon, which is why it is not in the row.
 rows = [
   [
+    { token = "$icon_spin", fg = "#f9e2af", dim = false },
     { token = "$icon_working_0", fg = "#f9e2af", bold = true, dim = false },
     { token = "$icon_working_1", fg = "#cdb98d", dim = false },
     { token = "$icon_working_2", fg = "#8a7c5e", dim = false },
