@@ -166,7 +166,7 @@ is overwritten the moment you finish typing it.
 | `activity_width` | `20` | Columns the activity text is windowed to; the socket does not expose the panel's width |
 | `activity_ms` | `220` | Milliseconds per scroll step |
 | `activity_gap` | `"   •   "` | Joins the end of the text back round to its start |
-| `activity_scroll` | `"always"` | `"always"`, `"working"` or `"off"`. Text that fits never scrolls |
+| `activity_scroll` | `"working"` | `"working"`, `"always"` or `"off"`. The row exists either way; this only decides what animates, and text that fits never scrolls |
 | `token_activity` | `"activity"` | Name the activity line is published under |
 | `folder_glyph` | `` | Glyph leading the folder token. Sidebar only; the tab label is untouched. `""` drops it |
 | `token_icon` | `"icon"` | Base name for the icon. Also publishes `<name>_idle`, `_working`, `_blocked`, `_done` and `_unknown`, of which only the current status is populated |

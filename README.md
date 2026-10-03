@@ -151,9 +151,11 @@ sidebar-only, since a tab label already starts with the app icon.
 
 The first row says what the agent is *doing*, from the title Claude Code sets.
 That text is routinely wider than the panel, so rather than let herdr truncate
-it the plugin scrolls it like an old LED sign. It costs herdr a redraw per step,
-so `activity_scroll` takes `"working"` or `"off"` as well as the shipped
-`"always"` - see [docs/sidebar.md](docs/sidebar.md) for the measurements.
+it the plugin scrolls it like an old LED sign - but only for a session that is
+actually working, since every step costs herdr a redraw. Idle entries keep the
+row and sit still, so the panel never reflows. `activity_scroll` takes
+`"always"` and `"off"` too; [docs/sidebar.md](docs/sidebar.md) has the
+measurements.
 
 Setup and the column arithmetic: [docs/sidebar.md](docs/sidebar.md).
 

@@ -132,8 +132,8 @@ and the daemon goes back to waiting on events.
 ### What it costs
 
 Every step is one `pane.report_metadata` write per scrolling pane, and each one
-makes herdr redraw. Measured on an 8-agent session with 4 lines overflowing, at
-the shipped 220ms:
+makes herdr redraw. Measured on an 8-agent session with 4 lines overflowing, at 220ms, with
+`activity_scroll` forced to `"always"`:
 
 | | herdr | plugin |
 |---|---|---|
@@ -143,8 +143,16 @@ the shipped 220ms:
 So roughly 2 points of one core per scrolling pane, and it lands on **herdr**,
 not the plugin - the plugin itself stays at 1% and 3 MB. Those figures are noisy,
 because an active agent's own output drives redraws independently; treat them as
-an order of magnitude. Set `activity_scroll = "working"` to pay it only for
-panes that are busy, or `"off"` to go back to herdr's ellipsis.
+an order of magnitude.
+
+That cost is why the shipped default is `activity_scroll = "working"`: a session
+you are waiting on is the one worth animating, and an idle panel costs nothing.
+`"always"` buys scrolling on idle rows at the rate above, and `"off"` goes back
+to herdr's ellipsis everywhere.
+
+The row itself is published whatever this is set to, so an entry keeps its
+height and the panel does not reflow as agents start and stop - an idle line
+just sits still.
 
 Raising `activity_ms` helps less than it looks: 450ms measured 23% against
 220ms's 25%, so the per-redraw cost is not what dominates.
