@@ -152,6 +152,18 @@ struct Marquee {
     scrolls: bool,
 }
 
+/// Where a marquee's window goes next, or `None` when it should stop.
+///
+/// A pane that has stopped scrolling still finishes its lap: the window keeps
+/// advancing until it wraps back to the start, so the text comes to rest at the
+/// beginning rather than frozen mid-word wherever the agent happened to finish.
+fn next_offset(scrolls: bool, offset: usize, ring: usize) -> Option<usize> {
+    if !scrolls && offset == 0 {
+        return None;
+    }
+    Some((offset + 1) % ring.max(1))
+}
+
 /// The slice of `text` visible at `offset`, or the whole of it when it fits.
 ///
 /// Text that fits is returned untouched, so a short line never jitters. A
@@ -440,6 +452,11 @@ impl Engine {
             entry.offset = 0;
         }
         entry.scrolls = scrolls;
+        // Nothing to wind down when the text now fits, and no lap will ever
+        // finish one that is off - either way, rest at the start.
+        if !overflows || scroll == ActivityScroll::Off {
+            entry.offset = 0;
+        }
 
         Some(window(&entry.text, width, entry.offset, &gap))
     }
@@ -452,9 +469,10 @@ impl Engine {
         if !cfg.activity || cfg.activity_scroll == ActivityScroll::Off {
             return None;
         }
+        // A pane that has stopped scrolling is still owed the rest of its lap.
         self.marquees
             .values()
-            .any(|m| m.scrolls)
+            .any(|m| m.scrolls || m.offset != 0)
             .then(|| Duration::from_millis(cfg.activity_ms.max(40)))
     }
 
@@ -474,11 +492,11 @@ impl Engine {
         };
         let mut frames: Vec<(String, String)> = Vec::new();
         for (pane_id, marquee) in self.marquees.iter_mut() {
-            if !marquee.scrolls {
-                continue;
-            }
             let ring = marquee.text.chars().count() + gap.chars().count();
-            marquee.offset = (marquee.offset + 1) % ring.max(1);
+            let Some(offset) = next_offset(marquee.scrolls, marquee.offset, ring) else {
+                continue;
+            };
+            marquee.offset = offset;
             frames.push((
                 pane_id.clone(),
                 window(&marquee.text, width, marquee.offset, &gap),
@@ -689,6 +707,33 @@ mod tests {
             );
             assert_eq!(frame.chars().count(), 8, "offset {offset} changed width");
         }
+    }
+
+    #[test]
+    fn a_stopped_marquee_finishes_its_lap_and_rests_at_the_start() {
+        // Still working: it keeps going, wrapping as it goes.
+        assert_eq!(next_offset(true, 0, 5), Some(1));
+        assert_eq!(next_offset(true, 4, 5), Some(0));
+        assert_eq!(next_offset(true, 0, 5), Some(1));
+
+        // Stopped mid-text: advance to the end of the lap, then stop dead -
+        // rather than freezing mid-word wherever the agent finished.
+        let mut offset = 2;
+        let mut steps = 0;
+        while let Some(next) = next_offset(false, offset, 5) {
+            offset = next;
+            steps += 1;
+            assert!(steps < 10, "wind-down must terminate");
+        }
+        assert_eq!(offset, 0, "must come to rest at the beginning");
+        assert_eq!(steps, 3, "2 -> 3 -> 4 -> 0");
+    }
+
+    #[test]
+    fn a_marquee_already_at_the_start_does_not_move() {
+        assert_eq!(next_offset(false, 0, 5), None);
+        // A degenerate ring must not divide by zero.
+        assert_eq!(next_offset(true, 0, 0), Some(0));
     }
 
     #[test]
