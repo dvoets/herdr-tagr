@@ -134,16 +134,20 @@ report_tokens = true
 # continuation row by 3, and separates tokens with " \u00b7 ". With the layout in
 # config/herdr.toml:
 #
-#   row 1   indent 1 + icon 1 + " \u00b7 " 3          -> folder token at column 5
-#   row 2   indent 3 + pad + glyph 1 + space 1   -> name starts at 5 + pad
+#   row 1   indent 1 + icon 1 + " \u00b7 " 3   -> $folder starts at column 5
+#   row 2   indent 3 + pad                  -> $branch starts at 3 + pad
 #
-# so 0 puts the branch name under the start of the folder token. Note that
-# folder_glyph below lives inside that token, so the folder *name* then sits 2
-# columns further right than the branch name; raise this to 2 if you would
-# rather the two names line up than the token starts. Put something back in
-# front of the icon - herdr's state_icon, or the workspace name - and raise
-# this by that token's width plus 3 for its separator.
-branch_indent = 0
+# The separator is 3 columns, not 1: herdr narrows it to " " only after its own
+# state_icon token (src/ui/sidebar/tokens.rs), and this row uses the plugin's
+# tokens instead.
+#
+# Both tokens have the same shape - glyph, space, name - so one value lines up
+# both halves. At 2 the branch glyph sits in column 5 under the folder glyph,
+# and the branch name in column 7 under the folder name.
+#
+# Put something back in front of the icon - herdr's state_icon, or the workspace
+# name - and raise this by that token's width plus its separator.
+branch_indent = 2
 
 # Leads the folder token in the sidebar, so the folder carries a mark of its own
 # the way the branch row does. U+F07B nf-fa-folder, verified present in Hack

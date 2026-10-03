@@ -559,6 +559,56 @@ mod tests {
     }
 
     #[test]
+    fn the_shipped_indent_lines_the_branch_up_under_the_folder() {
+        // herdr's own layout numbers, from src/client/shell/agent_sidebar.rs
+        // and src/ui/sidebar/tokens.rs: the first row of an entry is indented
+        // by 1 and continuation rows by 3, and tokens are joined with " \u00b7 "
+        // (3 columns) unless the token before is herdr's state_icon - which
+        // this row replaces, so the wide separator applies.
+        const ROW1_INDENT: usize = 1;
+        const ROW2_INDENT: usize = 3;
+        const SEPARATOR: usize = 3;
+        const ICON: usize = 1;
+
+        let cfg = Config::default();
+        let mut git = Cache::default();
+        let d = Detected {
+            app: app("claude", "I", Kind::Normal),
+            ssh_host: None,
+        };
+        let cwd = env!("CARGO_MANIFEST_DIR");
+        let t = tokens(&ctx(&d, Some(cwd), None), &cfg, &mut git);
+        let folder = t.folder.expect("a folder");
+        let branch = t.branch.expect("herdr-tagr is a git repository");
+
+        // Where each token's glyph and name actually land on screen.
+        let offset_of_name = |token: &str| {
+            token
+                .char_indices()
+                .find(|(_, c)| *c == ' ')
+                .map(|(i, _)| token[..i].chars().count() + 1)
+                .expect("glyph then space then name")
+        };
+        let folder_glyph_col = ROW1_INDENT + ICON + SEPARATOR;
+        let folder_name_col = folder_glyph_col + offset_of_name(&folder);
+        // The branch token carries its own padding, so its start is the row
+        // indent and the padding counts as part of the token.
+        let branch_glyph_col = ROW2_INDENT + cfg.sidebar.branch_indent;
+        let branch_name_col = ROW2_INDENT
+            + offset_of_name(branch.trim_start_matches('\u{2800}'))
+            + cfg.sidebar.branch_indent;
+
+        assert_eq!(
+            folder_glyph_col, branch_glyph_col,
+            "glyphs must share a column: folder at {folder_glyph_col}, branch at {branch_glyph_col}"
+        );
+        assert_eq!(
+            folder_name_col, branch_name_col,
+            "names must share a column: folder at {folder_name_col}, branch at {branch_name_col}"
+        );
+    }
+
+    #[test]
     fn an_empty_folder_glyph_leaves_the_token_bare() {
         let cfg = Config {
             sidebar: crate::config::Sidebar {

@@ -138,15 +138,15 @@ panel lay them out:
 ```
 before                        after
 --------------------------    --------------------------
-✓ home ·  herdr-tagr (...     herdr-tagr
-    claude                           main
+✓ home ·  herdr-tagr (...      ·  herdr-tagr
+    claude                          main
 ```
 
 The icon doubles as the activity light, taking herdr's status colours - yellow
 working, red blocked, teal done, green idle - so the separate state dot goes
-too. The folder leads with a `` of its own, matching the branch row
-below it; that one is sidebar-only, since a tab label already starts with the
-app icon.
+too. The folder leads with a `` of its own and the branch sits directly
+under it, glyph beneath glyph and name beneath name. The folder glyph is
+sidebar-only, since a tab label already starts with the app icon.
 
 Setup and the column arithmetic: [docs/sidebar.md](docs/sidebar.md).
 
