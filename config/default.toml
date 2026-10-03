@@ -157,17 +157,29 @@ token_branch = "branch"
 
 # Animate the icon of a pane whose agent is working.
 #
-# herdr redraws when pane metadata changes, so a spinner means pushing a frame
-# on a timer: one small request per working pane per frame, and nothing at all
-# while no agent is working. The daemon ignores the events its own frames
-# echo back, so animating does not drag it through a full recompute.
-#
-# The trade is that a spinning pane stops showing which model it is - the frame
-# replaces the provider glyph. Set spinner = false to keep the mark static.
+# herdr redraws when pane metadata changes, so an animation means pushing a
+# frame on a timer: one small request per working pane per frame, and nothing
+# at all while no agent is working. The daemon ignores the events its own
+# frames echo back, so animating does not drag it through a full recompute.
 spinner = true
-spinner_ms = 120
-# One character per frame. Braille dots by default; "\u25d0\u25d3\u25d1\u25d2" and
-# "\u2581\u2583\u2585\u2587\u2585\u2583" also work.
+spinner_ms = 180
+
+# How a working pane animates.
+#
+#   "pulse"  (default)  keep the provider glyph and cycle its colour, so a
+#                       working pane still says which model is running
+#   "frames"            replace the glyph with a spinner frame
+#
+# herdr cannot recolour a token on its own, so pulse works by moving the glyph
+# between tokens that the sidebar layout paints in different shades. Each step
+# is a token named <token_icon>_working_<n>, and config/herdr.toml colours them
+# bright, mid, dim, mid - which reads as breathing.
+spinner_style = "pulse"
+# Shades in the cycle, 2 to 4.
+pulse_steps = 4
+
+# One character per frame, for spinner_style = "frames". Braille dots by
+# default; "\u25d0\u25d3\u25d1\u25d2" and "\u2581\u2583\u2585\u2587\u2585\u2583" also work.
 spinner_frames = "\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f"
 
 [ssh]

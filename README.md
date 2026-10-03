@@ -144,7 +144,9 @@ before                        after
 
 The icon doubles as the activity light, taking herdr's status colours - yellow
 working, red blocked, teal done, green idle - so the separate state dot goes
-too. A working pane spins; it costs nothing while nothing is working.
+too. A working pane breathes - the provider glyph stays put and its colour
+cycles, so it keeps saying which model is running - and it costs nothing while
+nothing is working.
 
 Setup and the column arithmetic: [docs/sidebar.md](docs/sidebar.md).
 

@@ -166,8 +166,10 @@ is overwritten the moment you finish typing it.
 | `token_folder` | `"folder"` | Name the folder is published under |
 | `token_branch` | `"branch"` | Name the branch is published under |
 | `spinner` | `true` | Animate the icon of a pane whose agent is working |
-| `spinner_ms` | `120` | Milliseconds per frame |
-| `spinner_frames` | braille dots | One character per frame |
+| `spinner_ms` | `180` | Milliseconds per frame |
+| `spinner_style` | `"pulse"` | `"pulse"` cycles the provider glyph's colour; `"frames"` replaces the glyph |
+| `pulse_steps` | `4` | Shades in the pulse cycle, 2 to 4 |
+| `spinner_frames` | braille dots | One character per frame, for `"frames"` |
 
 See [sidebar.md](sidebar.md).
 

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::config::Config;
+use crate::config::{Config, SpinnerStyle};
 use crate::detect::{self, Detected, ProcessInfo};
 use crate::git;
 use crate::icons::{self, App};
@@ -287,18 +287,30 @@ impl Engine {
         // drawn, so this costs no width and lets each status take its own
         // colour from the sidebar layout.
         let status = pane.agent_status.as_deref().unwrap_or("unknown");
-        let spun = self.spinner_frame();
+        let working = status == "working";
+        let pulse = cfg.spinner && cfg.spinner_style == SpinnerStyle::Pulse;
+
         for known in STATUSES {
             let name = format!("{}_{known}", cfg.token_icon);
             let mut value = (*known == status).then(|| tokens.icon.clone()).flatten();
-            // A working pane shows the current frame, so the pass and the
-            // animation never disagree about what that token holds.
             if *known == "working" && value.is_some() {
-                if let Some(frame) = &spun {
-                    value = Some(frame.clone());
+                if pulse {
+                    // The shade tokens below carry it instead.
+                    value = None;
+                } else if let Some(frame) = self.spinner_frame() {
+                    value = Some(frame);
                 }
             }
             payload.insert(name, json!(value));
+        }
+
+        // Pulse keeps the provider glyph and moves it between tokens that the
+        // sidebar paints in different shades, so the mark stays readable while
+        // its colour breathes.
+        for step in 0..self.pulse_steps() {
+            let name = format!("{}_working_{step}", cfg.token_icon);
+            let lit = pulse && working && step == self.pulse_step();
+            payload.insert(name, json!(lit.then(|| tokens.icon.clone()).flatten()));
         }
 
         if self.reported.get(&pane.pane_id) == Some(&payload) {
@@ -458,26 +470,66 @@ impl Engine {
             return Vec::new();
         }
         self.frame = self.frame.wrapping_add(1);
-        let Some(frame) = self.spinner_frame() else {
-            return Vec::new();
+        let cfg = &self.cfg.sidebar;
+
+        // Which token names change, and what each should hold now.
+        let updates: Vec<(String, Option<String>)> = if cfg.spinner_style == SpinnerStyle::Pulse {
+            let lit = self.pulse_step();
+            (0..self.pulse_steps())
+                .map(|step| {
+                    (
+                        format!("{}_working_{step}", cfg.token_icon),
+                        (step == lit).then(String::new),
+                    )
+                })
+                .collect()
+        } else {
+            vec![(format!("{}_working", cfg.token_icon), self.spinner_frame())]
         };
-        let name = format!("{}_working", self.cfg.sidebar.token_icon);
 
         let mut painted = Vec::new();
         for pane_id in self.working.clone() {
+            // In pulse mode the value is the pane's own glyph, which the last
+            // full pass already worked out.
+            let glyph = self
+                .reported
+                .get(&pane_id)
+                .and_then(|p| p.get(&self.cfg.sidebar.token_icon))
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+
+            let mut tokens = serde_json::Map::new();
+            for (name, value) in &updates {
+                let value = match value {
+                    Some(v) if v.is_empty() => glyph.clone(),
+                    other => other.clone(),
+                };
+                tokens.insert(name.clone(), json!(value));
+            }
+
             let request = json!({
                 "pane_id": pane_id,
                 "source": TOKEN_SOURCE,
-                "tokens": { name.as_str(): frame },
+                "tokens": Value::Object(tokens.clone()),
             });
             if self.client.request("pane.report_metadata", request).is_ok() {
                 if let Some(cached) = self.reported.get_mut(&pane_id) {
-                    cached.insert(name.clone(), json!(frame));
+                    for (name, value) in tokens {
+                        cached.insert(name, value);
+                    }
                 }
                 painted.push(pane_id);
             }
         }
         painted
+    }
+
+    fn pulse_steps(&self) -> usize {
+        self.cfg.sidebar.pulse_steps.clamp(2, 4)
+    }
+
+    fn pulse_step(&self) -> usize {
+        self.frame % self.pulse_steps()
     }
 
     pub fn spinner_interval(&self) -> Option<Duration> {

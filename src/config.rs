@@ -188,8 +188,23 @@ pub struct Sidebar {
     pub spinner: bool,
     /// Milliseconds per frame.
     pub spinner_ms: u64,
-    /// The frames, one character each.
+    /// The frames, one character each. Only used by `spinner_style = "frames"`.
     pub spinner_frames: String,
+    /// How a working pane animates.
+    pub spinner_style: SpinnerStyle,
+    /// Shades in the pulse cycle, each a separate token the sidebar colours.
+    /// Capped at 4 to stay well inside herdr's 16-token limit per report.
+    pub pulse_steps: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpinnerStyle {
+    /// Keep the provider glyph and cycle its colour, so a working pane still
+    /// says which model is running.
+    Pulse,
+    /// Replace the glyph with a spinner frame.
+    Frames,
 }
 
 impl Default for Sidebar {
@@ -201,10 +216,12 @@ impl Default for Sidebar {
             token_folder: "folder".to_string(),
             token_branch: "branch".to_string(),
             spinner: true,
-            spinner_ms: 120,
+            spinner_ms: 180,
             spinner_frames:
                 "\u{280b}\u{2819}\u{2839}\u{2838}\u{283c}\u{2834}\u{2826}\u{2827}\u{2807}\u{280f}"
                     .to_string(),
+            spinner_style: SpinnerStyle::Pulse,
+            pulse_steps: 4,
         }
     }
 }
