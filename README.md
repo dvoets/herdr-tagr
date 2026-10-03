@@ -138,7 +138,7 @@ panel lay them out:
 ```
 before                        after
 --------------------------    --------------------------
-✓ home ·  herdr-tagr (...      · Herder terminal rede…
+✓ home ·  herdr-tagr (...      · Verify only working pa…
     claude                        herdr-tagr
                                   main
 ```
@@ -149,7 +149,11 @@ too. The folder leads with a `` of its own and the branch sits directly
 under it, glyph beneath glyph and name beneath name. The folder glyph is
 sidebar-only, since a tab label already starts with the app icon.
 
-The first row says what the agent is *doing*, from the title Claude Code sets.
+The first row says what the agent is *doing*, read from Claude Code's own
+session transcript - the newest tool call, in a few words ("Run the suite",
+"Editing label.rs"), falling back to the session title whenever there is
+nothing to read.
+
 That text is routinely wider than the panel, so rather than let herdr truncate
 it the plugin scrolls it like an old LED sign - but only for a session that is
 actually working, since every step costs herdr a redraw. Idle entries keep the

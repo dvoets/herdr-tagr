@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::config::{ActivityScroll, Config};
+use crate::config::{ActivityScroll, ActivitySource, Config};
 use crate::detect::{self, Detected, ProcessInfo};
 use crate::git;
 use crate::icons::{self, App};
@@ -42,6 +42,17 @@ pub struct Pane {
     pub terminal_title: Option<String>,
     #[serde(default)]
     pub terminal_title_stripped: Option<String>,
+    /// The agent's own session identity, which for Claude Code is the name of
+    /// its transcript file.
+    #[serde(default)]
+    pub agent_session: Option<AgentSession>,
+}
+
+/// herdr's identity for the agent running in a pane.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AgentSession {
+    #[serde(default)]
+    pub value: Option<String>,
 }
 
 impl Pane {
@@ -126,6 +137,8 @@ pub struct Engine {
     worktrees: HashMap<String, String>,
     /// Scrolling activity line per pane, keyed by pane id.
     marquees: HashMap<String, Marquee>,
+    /// Transcript readers, keyed by agent session id.
+    activity: crate::activity::Tracker,
 }
 
 /// One pane's activity line and where its window currently sits.
@@ -193,6 +206,7 @@ impl Engine {
             reported: HashMap::new(),
             worktrees: HashMap::new(),
             marquees: HashMap::new(),
+            activity: Default::default(),
         })
     }
 
@@ -363,24 +377,50 @@ impl Engine {
     /// `None` for anything that is not an agent: a plain shell's title is its
     /// prompt (`daan@host:~/Downloads`), which would fill the row with noise.
     fn activity_frame(&mut self, pane: &Pane) -> Option<String> {
-        let cfg = &self.cfg.sidebar;
+        // Copied out before the tracker below needs &mut self.
+        let (width, gap, scroll, source, max) = {
+            let cfg = &self.cfg.sidebar;
+            (
+                cfg.activity_width,
+                cfg.activity_gap.clone(),
+                cfg.activity_scroll,
+                cfg.activity_source,
+                cfg.activity_max,
+            )
+        };
         let status = pane.agent_status.as_deref().unwrap_or("unknown");
         let is_agent = status != "unknown";
-        let text = pane
+        let working = status == "working";
+
+        // While it is working, what it is doing; otherwise what the session is
+        // about. A finished pane's last tool call is stale, and the title is
+        // the better answer once there is nothing in flight.
+        let live = (source == ActivitySource::Transcript && working && is_agent)
+            .then(|| {
+                pane.agent_session
+                    .as_ref()
+                    .and_then(|session| session.value.as_deref())
+                    .and_then(|id| self.activity.activity(id, pane.dir(), max))
+            })
+            .flatten();
+
+        let title = pane
             .terminal_title_stripped
             .as_deref()
             .map(str::trim)
             .filter(|t| !t.is_empty())
-            .filter(|_| is_agent);
+            .map(str::to_string);
+        let text = live.or(title).filter(|_| is_agent);
 
         let Some(text) = text else {
             self.marquees.remove(&pane.pane_id);
             return None;
         };
+        let text = text.as_str();
 
-        let overflows = text.chars().count() > cfg.activity_width;
+        let overflows = text.chars().count() > width;
         let scrolls = overflows
-            && match cfg.activity_scroll {
+            && match scroll {
                 ActivityScroll::Always => true,
                 ActivityScroll::Working => status == "working",
                 ActivityScroll::Off => false,
@@ -402,12 +442,7 @@ impl Engine {
         }
         entry.scrolls = scrolls;
 
-        Some(window(
-            &entry.text,
-            cfg.activity_width,
-            entry.offset,
-            &cfg.activity_gap,
-        ))
+        Some(window(&entry.text, width, entry.offset, &gap))
     }
 
     /// How long until the next scroll step, or `None` when nothing is
@@ -491,6 +526,14 @@ impl Engine {
             }
             self.reported
                 .retain(|id, _| snap.panes.iter().any(|p| &p.pane_id == id));
+            // Drop transcript readers for sessions that have gone away, so a
+            // long-lived daemon does not accumulate them.
+            let live: BTreeSet<&str> = snap
+                .panes
+                .iter()
+                .filter_map(|p| p.agent_session.as_ref()?.value.as_deref())
+                .collect();
+            self.activity.retain(|id| live.contains(id));
         }
 
         let live: BTreeSet<String> = snap.tabs.iter().map(|t| t.tab_id.clone()).collect();

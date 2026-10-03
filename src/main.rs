@@ -3,6 +3,7 @@
 //! `daemon` is what the plugin's startup hook runs. The other subcommands are
 //! the plugin actions and a couple of debugging aids.
 
+mod activity;
 mod config;
 mod detect;
 mod engine;

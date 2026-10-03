@@ -186,6 +186,28 @@ activity_gap = "   \u2022   "
 # which is why "always" is not the default: see docs/sidebar.md.
 activity_scroll = "working"
 
+# Where the line's words come from.
+#
+#   "transcript" (default)  what the agent is doing now, read from Claude
+#                           Code's session transcript - the newest tool call,
+#                           named in a few words ("Run the suite",
+#                           "Editing label.rs"). herdr hands over the agent's
+#                           session id and Claude Code names its transcript
+#                           after exactly that, so the mapping is exact.
+#   "title"                 herdr's terminal_title_stripped: the session's
+#                           subject rather than its work, which changes rarely
+#                           and is often just "Claude Code".
+#
+# "transcript" falls back to the title whenever there is nothing to read: a
+# pane that is not Claude, a session that has not written its transcript yet,
+# or an internal format that has moved. It also shows the title rather than a
+# stale tool call once the agent stops working.
+activity_source = "transcript"
+
+# Longest activity line kept, in characters, so one enormous tool description
+# cannot become a scroll loop that takes a minute to come round.
+activity_max = 60
+
 # Names the tokens are published under, referenced from herdr's sidebar layout
 # as $icon, $folder and $branch. Rename them if they would collide with another
 # plugin's tokens.
