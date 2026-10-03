@@ -390,12 +390,11 @@ impl Engine {
         };
         let status = pane.agent_status.as_deref().unwrap_or("unknown");
         let is_agent = status != "unknown";
-        let working = status == "working";
 
-        // While it is working, what it is doing; otherwise what the session is
-        // about. A finished pane's last tool call is stale, and the title is
-        // the better answer once there is nothing in flight.
-        let live = (source == ActivitySource::Transcript && working && is_agent)
+        // The last tool call whether or not it is still running: "what it just
+        // did" beats falling back to the session title, which Claude Code sets
+        // lazily and is usually the useless generic "Claude Code".
+        let live = (source == ActivitySource::Transcript && is_agent)
             .then(|| {
                 pane.agent_session
                     .as_ref()
