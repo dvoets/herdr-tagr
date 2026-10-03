@@ -198,10 +198,11 @@ activity_scroll = "working"
 #                           subject rather than its work, which changes rarely
 #                           and is often just "Claude Code".
 #
-# "transcript" falls back to the title whenever there is nothing to read: a
-# pane that is not Claude, a session that has not written its transcript yet,
-# or an internal format that has moved. It also shows the title rather than a
-# stale tool call once the agent stops working.
+# "transcript" falls back to the title only when there is nothing to read at
+# all: a pane that is not Claude, a session that has not written its transcript
+# yet, or an internal format that has moved. An idle pane keeps showing its last
+# call - what it just did - because the title is set lazily and is usually the
+# generic "Claude Code", which says less than the stalest tool call.
 activity_source = "transcript"
 
 # Longest activity line kept, in characters, so one enormous tool description

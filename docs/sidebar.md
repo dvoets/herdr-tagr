@@ -131,10 +131,13 @@ that has moved, a pane that is not Claude, or a session that has not written its
 transcript yet all fall back to `terminal_title_stripped`. `activity_source =
 "title"` uses that field directly.
 
-Two things to expect. The line **lags by one pass**, because it is read when
-herdr sends an event rather than when the transcript is written. And once the
-agent stops working it shows the session title instead, since the last tool call
-it ran is stale by then.
+An idle pane keeps showing its **last** call - what it just did - rather than
+falling back to the title. The title is the obvious-looking choice and the wrong
+one: Claude Code writes it lazily, so it is usually the generic "Claude Code",
+which says less than the stalest tool call.
+
+One thing to expect: the line **lags by one pass**, because it is read when
+herdr sends an event rather than when the transcript is written.
 
 Only agent panes get it. A plain shell's title is its prompt
 (`daan@host:~/Downloads`), which would fill the row with noise, so panes whose

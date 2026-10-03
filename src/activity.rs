@@ -215,7 +215,11 @@ fn describe(name: &str, input: &Value) -> Option<String> {
     let base = |key: &str| field(key).map(|path| path.rsplit('/').next().unwrap_or(path));
 
     let described = match name {
-        "Bash" => field("description").map(str::to_string),
+        // A description is written for most calls but is not guaranteed, and
+        // bare "Bash" says nothing - so fall back to the command itself.
+        "Bash" => field("description")
+            .map(str::to_string)
+            .or_else(|| field("command").map(command_gist)),
         "Read" => base("file_path").map(|f| format!("Reading {f}")),
         "Edit" | "NotebookEdit" => base("file_path").map(|f| format!("Editing {f}")),
         "Write" => base("file_path").map(|f| format!("Writing {f}")),
@@ -234,6 +238,17 @@ fn describe(name: &str, input: &Value) -> Option<String> {
     // An unrecognised tool still says more than nothing: a new tool name, or
     // one whose fields have moved, shows up as itself rather than vanishing.
     described.or_else(|| Some(name.to_string()))
+}
+
+/// The useful head of a shell command: the program, plus its first argument
+/// when that is not a flag, so `git commit -m ...` reads as "git commit".
+fn command_gist(command: &str) -> String {
+    let mut words = command.split_whitespace();
+    let program = words.next().unwrap_or("").rsplit('/').next().unwrap_or("");
+    match words.next() {
+        Some(next) if !next.starts_with('-') => format!("{program} {next}"),
+        _ => program.to_string(),
+    }
 }
 
 /// Caps the line on a character boundary, so one enormous description cannot
@@ -273,6 +288,15 @@ mod tests {
     fn a_bash_call_shows_the_description_it_already_carries() {
         let input = serde_json::json!({ "command": "cargo test", "description": "Run the suite" });
         assert_eq!(describe("Bash", &input).as_deref(), Some("Run the suite"));
+    }
+
+    #[test]
+    fn a_bash_call_without_a_description_falls_back_to_the_command() {
+        let input = serde_json::json!({ "command": "/usr/bin/git commit -m wip" });
+        assert_eq!(describe("Bash", &input).as_deref(), Some("git commit"));
+        // A flag is not a useful second word.
+        let input = serde_json::json!({ "command": "cargo --version" });
+        assert_eq!(describe("Bash", &input).as_deref(), Some("cargo"));
     }
 
     #[test]

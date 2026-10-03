@@ -217,11 +217,13 @@ pub struct Sidebar {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ActivitySource {
-    /// What the agent is doing now, read from Claude Code's session
-    /// transcript: the newest tool call, named in a few words. Falls back to
-    /// the title whenever there is nothing to read - a pane that is not
-    /// Claude, a session that has not written a transcript yet, or a format
-    /// that has moved under us.
+    /// What the agent is doing, read from Claude Code's session transcript:
+    /// the newest tool call, named in a few words. An idle pane keeps showing
+    /// its last call - "what it just did" - rather than falling back to the
+    /// title, which Claude Code sets lazily and is usually the generic
+    /// "Claude Code". Falls back to the title only when there is nothing to
+    /// read at all: a pane that is not Claude, a session that has not written
+    /// a transcript yet, or a format that has moved under us.
     #[default]
     Transcript,
     /// herdr's `terminal_title_stripped`: the session's subject rather than
