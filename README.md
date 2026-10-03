@@ -144,7 +144,7 @@ before                        after
 ```
 
 The icon doubles as the activity light, taking herdr's status colours - yellow
-working, red blocked, teal done, green idle - so the separate state dot goes
+working, red blocked, mauve done, green idle - so the separate state dot goes
 too. The folder leads with a `` of its own and the branch sits directly
 under it, glyph beneath glyph and name beneath name. The folder glyph is
 sidebar-only, since a tab label already starts with the app icon.
