@@ -124,9 +124,34 @@ always the last word.
 |---|---|
 | `Tagr: auto-title this tab` | Hand a tab over, including one you named or previously renamed |
 | `Tagr: stop auto-titling this tab` | Take it back |
+| `Tagr: next agent needing attention` | Jump to the next blocked or finished agent |
+| `Tagr: previous agent needing attention` | The same, backwards |
 
 To skip herdr's new-tab prompt entirely, see
 [docs/configuration.md](docs/configuration.md#skipping-the-new-tab-prompt).
+
+## Jumping to the agents that want you
+
+The sidebar colours a blocked agent red and a finished one sky, but you still
+have to go and find them. These bind a key to walking that queue:
+
+```toml
+[[keys.command]]
+key = ["alt+d", "prefix+d"]
+type = "plugin_action"
+command = "herdr-tagr.next-attention"
+description = "next agent needing attention"
+```
+
+Blocked agents come first - one sitting on a question is stalled, while a
+finished one has already done its work - and within a status the panel's own
+top-to-bottom order is kept. Pressing the key again walks the queue and wraps
+at the end; from a pane that is not in the queue the first press lands on the
+front of it, so it always goes somewhere useful. With nothing blocked or done
+it says so and stays put.
+
+The block above and its backwards twin are in
+[config/herdr.toml](config/herdr.toml), ready to paste.
 
 ## The sidebar
 

@@ -63,6 +63,8 @@ fn main() {
         "config" => show_config(),
         "print" => print_labels(),
         "doctor" => doctor(),
+        "next-attention" => next_attention(1),
+        "prev-attention" => next_attention(-1),
         "--version" | "-V" | "version" => {
             println!("herdr-tagr {VERSION}");
             Ok(())
@@ -80,6 +82,53 @@ fn main() {
     }
 }
 
+/// Focuses the next pane wanting attention, relative to the focused one.
+///
+/// `step` is +1 or -1. Pressing the key repeatedly walks the queue and wraps,
+/// and a pane that is not itself in the queue starts from the beginning - so
+/// the first press always lands somewhere useful.
+fn next_attention(step: isize) -> Result<(), String> {
+    let mut engine = Engine::new()?;
+    let (panes, focused) = engine.attention_panes()?;
+    if panes.is_empty() {
+        println!("herdr-tagr: no agent is blocked or done");
+        return Ok(());
+    }
+
+    let here = focused
+        .as_deref()
+        .and_then(|id| panes.iter().position(|pane| pane.pane_id == id));
+    let next = next_index(here, panes.len(), step);
+    let pane = &panes[next];
+    engine.focus_pane(&pane.pane_id)?;
+    println!(
+        "herdr-tagr: focused {} ({}), {} of {}",
+        pane.pane_id,
+        pane.agent_status.as_deref().unwrap_or("unknown"),
+        next + 1,
+        panes.len()
+    );
+    Ok(())
+}
+
+/// Which entry in the queue to go to next.
+///
+/// `here` is where the focused pane sits in the queue, or `None` when the
+/// focused pane is not in it at all - in which case stepping forwards starts at
+/// the front and backwards at the back, so the first press always lands
+/// somewhere useful. From inside the queue it moves along and wraps.
+fn next_index(here: Option<usize>, len: usize, step: isize) -> usize {
+    debug_assert!(len > 0, "callers must handle an empty queue");
+    match here {
+        Some(index) => {
+            let len = len as isize;
+            (((index as isize + step) % len + len) % len) as usize
+        }
+        None if step >= 0 => 0,
+        None => len - 1,
+    }
+}
+
 fn print_help() {
     println!(
         "herdr-tagr {VERSION} - concise, icon-first tab titles for herdr
@@ -93,7 +142,10 @@ Commands:
   release   Stop auto-titling the current tab
   config    Show the effective configuration and where each layer came from
   print     Show what each tab would be titled, without changing anything
-  doctor    Explain how the current pane's title is derived"
+  doctor    Explain how the current pane's title is derived
+
+  next-attention  Focus the next agent that wants you: blocked first, then done
+  prev-attention  The same, backwards"
     );
 }
 
@@ -403,4 +455,30 @@ fn doctor() -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stepping_through_the_queue_wraps_at_both_ends() {
+        assert_eq!(next_index(Some(0), 3, 1), 1);
+        assert_eq!(next_index(Some(2), 3, 1), 0, "forwards wraps to the front");
+        assert_eq!(next_index(Some(0), 3, -1), 2, "backwards wraps to the back");
+        assert_eq!(next_index(Some(1), 3, -1), 0);
+    }
+
+    #[test]
+    fn from_outside_the_queue_the_first_press_lands_on_an_end() {
+        assert_eq!(next_index(None, 3, 1), 0);
+        assert_eq!(next_index(None, 3, -1), 2);
+    }
+
+    #[test]
+    fn a_queue_of_one_stays_put() {
+        assert_eq!(next_index(Some(0), 1, 1), 0);
+        assert_eq!(next_index(Some(0), 1, -1), 0);
+        assert_eq!(next_index(None, 1, 1), 0);
+    }
 }

@@ -39,6 +39,8 @@ pub struct Pane {
     #[serde(default)]
     pub foreground_cwd: Option<String>,
     #[serde(default)]
+    pub focused: bool,
+    #[serde(default)]
     pub terminal_title: Option<String>,
     #[serde(default)]
     pub terminal_title_stripped: Option<String>,
@@ -637,6 +639,43 @@ impl Engine {
             out.push((tab.clone(), pane.clone(), label, managed));
         }
         Ok(out)
+    }
+
+    /// Panes that want the person's attention, most urgent first.
+    ///
+    /// Blocked leads: an agent sitting on a question is stalled, while one that
+    /// is done has already finished its work. Within a status the snapshot's
+    /// own order is kept, so the key walks the panel top to bottom.
+    pub fn attention_panes(&mut self) -> Result<(Vec<Pane>, Option<String>), String> {
+        let snap = self.snapshot()?;
+        let focused = snap
+            .panes
+            .iter()
+            .find(|pane| pane.focused)
+            .map(|pane| pane.pane_id.clone());
+        let rank = |pane: &Pane| match pane.agent_status.as_deref() {
+            Some("blocked") => Some(0),
+            Some("done") => Some(1),
+            _ => None,
+        };
+        let mut wanted: Vec<(u8, usize, Pane)> = snap
+            .panes
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, pane)| rank(&pane).map(|r| (r, index, pane)))
+            .collect();
+        wanted.sort_by_key(|(r, index, _)| (*r, *index));
+        Ok((
+            wanted.into_iter().map(|(_, _, pane)| pane).collect(),
+            focused,
+        ))
+    }
+
+    /// Moves herdr's focus to a pane.
+    pub fn focus_pane(&self, pane_id: &str) -> Result<(), String> {
+        self.client
+            .request("pane.focus", json!({ "pane_id": pane_id }))
+            .map(|_| ())
     }
 
     pub fn process_info_raw(&self, pane_id: &str) -> Result<Value, String> {
