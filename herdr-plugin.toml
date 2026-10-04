@@ -1,6 +1,6 @@
 id = "herdr-tagr"
 name = "Tagr"
-version = "0.2.0"
+version = "0.3.0"
 min_herdr_version = "0.7.5"
 description = "Concise, icon-first tab titles: app icon + folder + git branch."
 platforms = ["linux", "macos", "windows"]

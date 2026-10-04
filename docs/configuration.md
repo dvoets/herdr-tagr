@@ -19,6 +19,9 @@ The daemon notices edits to either file on its own - no restart. An unknown key
 is an error rather than a silent fallback, and a file that does not parse is
 reported and skipped rather than taking the tab bar down with it.
 
+If you would rather copy a working block than read a table, the
+[recipes](recipes.md) are ready to paste.
+
 The tables below give the **shipped** value, which is what you actually get.
 Two of them are the plugin's opinion rather than the code's default, and are
 marked as such. A test asserts the shipped file states every key, so it cannot
@@ -48,6 +51,7 @@ plugin's. It is in [`config/herdr.toml`](../config/herdr.toml) to copy across.
 | `show_git` | `true` | The git fragment |
 | `show_folder` | `true` | The folder name |
 | `separator` | `" "` | Between the label's parts |
+| `glyph_separator` | `" "` | Between a glyph and the name it marks, wherever the two are joined. See [Where a glyph sits](#where-a-glyph-sits) |
 | `max_length` | `32` | Hard cap on the rendered label, in characters. `0` means no limit |
 | `home_symbol` | `"~"` | Shown instead of the folder when the directory is your home |
 | `ellipsis` | `"…"` | Appended when something is truncated |
@@ -80,6 +84,7 @@ from the shape of the path.
 | `branch_glyph` | `""` | nf-dev-git_branch |
 | `detached_glyph` | `""` | nf-oct-git_commit |
 | `detached_len` | `7` | Length of the abbreviated commit on a detached HEAD |
+| `branch_glyph_position` | `"before"` | Which side of the branch its glyph sits on: `"before"`, `"after"` or `"off"`. See [Where a glyph sits](#where-a-glyph-sits) |
 | `recheck_non_repo_ms` | `10000` | How long a directory stays remembered as "not a repository" |
 
 ### Why brackets and not colour
@@ -87,6 +92,32 @@ from the shape of the path.
 herdr paints a tab label with a single `Style` and never parses the string for
 escape sequences, so colour cannot separate the branch from the folder.
 Brackets do that job instead - the same trick a shell prompt uses.
+
+### Where a glyph sits
+
+Two marks lead a name rather than standing alone - the branch glyph and the
+sidebar's folder glyph - and each takes a position:
+
+```
+                      sidebar.folder_glyph    git.branch_glyph
+                      --------------------    ----------------
+"before" (default)     herdr-tagr             feat/auth
+"after"               herdr-tagr             feat/auth 
+"off"                 herdr-tagr              feat/auth
+```
+
+`label.glyph_separator` is what goes between the two, and applies everywhere a
+glyph meets a name: the git fragment in a tab label, and the folder and branch
+tokens in the sidebar. `""` butts them together, `"  "` opens them up.
+
+`"off"` and setting the glyph itself to `""` do the same thing, and neither
+leaves a stray separator behind - so dropping a mark is one key either way.
+Prefer `"off"` when you want the glyph kept in your config to switch back on.
+
+Moving the branch glyph to the other side moves the branch *name* two columns
+left, which breaks the sidebar's folder/branch alignment - raise
+`sidebar.branch_indent` by the same amount to restore it. The arithmetic is in
+[sidebar.md](sidebar.md).
 
 ### `default_branch_style`
 
@@ -169,13 +200,97 @@ is overwritten the moment you finish typing it.
 | `activity_ms` | `220` | Milliseconds per scroll step |
 | `activity_gap` | `"   •   "` | Joins the end of the text back round to its start |
 | `activity_scroll` | `"working"` | `"working"`, `"always"` or `"off"`. The row exists either way; this only decides what animates, and text that fits never scrolls |
+| `activity_direction` | `"left"` | Which way the words travel: `"left"` or `"right"` |
+| `activity_step` | `1` | Columns moved per frame. `0` is read as `1` |
+| `activity_dwell_ms` | `0` | Rest at the start of each lap, so the opening words can be read. Counted in whole `activity_ms` frames |
+| `activity_wind_down` | `true` | Let a stopped line finish its lap instead of snapping home |
 | `token_activity` | `"activity"` | Name the activity line is published under |
 | `folder_glyph` | `` | Glyph leading the folder token. Sidebar only; the tab label is untouched. `""` drops it |
+| `folder_glyph_position` | `"before"` | `"before"`, `"after"` or `"off"`. `"before"` is what lines it up with the branch glyph below |
 | `token_icon` | `"icon"` | Base name for the icon. Also publishes `<name>_idle`, `_working`, `_blocked`, `_done` and `_unknown`, of which only the current status is populated |
 | `token_folder` | `"folder"` | Name the folder is published under |
 | `token_branch` | `"branch"` | Name the branch is published under |
 
-See [sidebar.md](sidebar.md).
+See [sidebar.md](sidebar.md) for the column arithmetic, the cost of scrolling,
+and how the status colours are wired.
+
+### How the line moves
+
+Four keys shape the scroll, and none of them costs anything extra: the cost is
+one metadata write per moving line per frame, whatever the step, and a line
+that is not moving is not written at all.
+
+```toml
+[sidebar]
+activity_ms        = 220      # one frame
+activity_step      = 1        # columns per frame
+activity_direction = "left"   # the LED-sign direction
+activity_dwell_ms  = 0        # rest at the start of each lap
+activity_wind_down = true     # finish the lap when work stops
+```
+
+`activity_step` is the cheap way to scroll faster: three columns per frame
+covers three times the ground for the same number of writes, at the cost of
+gliding less and jumping more. Halving `activity_ms` instead doubles the
+writes.
+
+`activity_dwell_ms` pauses at the **start** of every lap - the opening words
+are the ones that say what is happening, and without a pause they sweep past
+before you have focused on the row. It is counted in whole frames, so with the
+default 220ms frame a dwell of `1000` holds for four of them (880ms) and
+anything under `220` is no pause at all. Every lap ends exactly on the first
+column however wide the step, so the pause always lands in the same place.
+
+`activity_wind_down` is what happens when an agent stops working and its line
+stops being driven. On, the line keeps going until it reaches its first column
+and rests there; off, it snaps back in a single frame. Either way it comes to
+rest at the beginning rather than frozen mid-word.
+
+### `[sidebar.activity_verbs]`
+
+How each tool call is worded. `{}` is replaced by whatever that tool acts on;
+a template without it is used as it stands.
+
+```toml
+[sidebar.activity_verbs]
+Read = "Looking at {}"
+Grep = "Hunting for {}"
+```
+
+Entries merge one key at a time, so naming one tool leaves the rest alone. The
+shipped table and the subject each `{}` is filled with:
+
+| Tool | Template | `{}` is |
+|---|---|---|
+| `Bash` | `{}` | the call's own written description, else the command reduced to its program and first real argument (`cargo test`) |
+| `Read` | `Reading {}` | the file's name, without its path |
+| `Edit`, `NotebookEdit` | `Editing {}` | the same |
+| `Write` | `Writing {}` | the same |
+| `Grep` | `Searching {}` | the pattern |
+| `Glob` | `Finding {}` | the pattern |
+| `Task`, `Agent` | `Delegating {}` | the subagent's description |
+| `Skill` | `Running {}` | the skill's name |
+| `WebFetch` | `Fetching {}` | the URL's host |
+| `WebSearch` | `Searching {}` | the query |
+| `AskUserQuestion` | `Asking you` | - |
+| `TodoWrite` | `Planning` | - |
+
+A tool with no entry shows its own bare name, and so does one whose `{}` cannot
+be filled - a tool newer than this plugin still gets a row rather than blanking
+it. Setting a template to `""` opts a tool back into that fallback without
+deleting the key that documents it.
+
+Tools the plugin has never heard of can be given words too. For those, `{}` is
+the first of `description`, `file_path`, `pattern`, `query`, `url` or `command`
+that the call actually carries:
+
+```toml
+[sidebar.activity_verbs]
+mcp__postgres__query = "Querying {}"
+```
+
+The phrasing is read fresh on every pass, so an edit shows up on the next one
+without restarting the daemon.
 
 ## `[apps]`
 
