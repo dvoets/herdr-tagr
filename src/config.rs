@@ -54,6 +54,10 @@ pub struct Label {
     pub show_folder: bool,
     /// Joins icon / git / folder segments.
     pub separator: String,
+    /// Sits between a glyph and the name it marks, wherever the two are
+    /// joined: the git fragment in the tab label, and the folder and branch
+    /// tokens in the sidebar. Set to `""` to butt them together.
+    pub glyph_separator: String,
     /// Hard cap on the rendered label, in characters.
     pub max_length: usize,
     /// Shown instead of the folder when the directory is `$HOME`.
@@ -90,6 +94,15 @@ pub struct Git {
     /// herdr paints a tab label with a single style and never parses it, so
     /// colour cannot separate branch from folder - punctuation has to.
     pub wrap: [String; 2],
+    /// Which side of the branch (or short commit) its glyph sits on, in the
+    /// tab label and in the sidebar's branch token alike. `Off` drops the
+    /// glyph and keeps the name.
+    ///
+    /// Note that `Before` is what `sidebar.branch_indent` is measured
+    /// against: moving the glyph to the other side moves the name two columns
+    /// left, so the indent wants raising by the same amount to keep the
+    /// branch lined up under the folder.
+    pub branch_glyph_position: GlyphPosition,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -99,6 +112,23 @@ pub enum GitPosition {
     AfterFolder,
     /// `(\u{e725} feat/auth) api`
     BeforeFolder,
+}
+
+/// Which side of a name its glyph sits on.
+///
+/// Applies to the marks that lead a name rather than stand alone: the branch
+/// glyph and the sidebar's folder glyph. A glyph that is empty renders as
+/// nothing wherever it is put, so `Off` and `glyph = ""` agree.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GlyphPosition {
+    /// `\u{f07b} herdr-tagr`
+    #[default]
+    Before,
+    /// `herdr-tagr \u{f07b}`
+    After,
+    /// `herdr-tagr` - the name alone.
+    Off,
 }
 
 /// What to show when sitting on the repository's default branch.
@@ -181,6 +211,9 @@ pub struct Sidebar {
     /// glyph there costs width without saying anything new. Set to "" to drop
     /// it.
     pub folder_glyph: String,
+    /// Which side of the folder name its glyph sits on. `Before` is what puts
+    /// it in the same column as the branch glyph on the row below.
+    pub folder_glyph_position: GlyphPosition,
     /// Publishes what the agent is doing as its own token, taken from herdr's
     /// `terminal_title_stripped`. Only agent panes get it: a plain shell's
     /// title is its prompt, which says nothing worth a row.
@@ -199,12 +232,35 @@ pub struct Sidebar {
     /// Which panes scroll. Text that already fits never scrolls whatever this
     /// says.
     pub activity_scroll: ActivityScroll,
+    /// Which way the words travel.
+    pub activity_direction: ActivityDirection,
+    /// Columns moved per frame. Raising it scrolls faster without costing
+    /// more writes, at the price of smoothness; 0 is read as 1.
+    pub activity_step: usize,
+    /// How long to rest at the start of each lap, so the opening words can be
+    /// read before the line sets off. Counted in whole frames, so values
+    /// below `activity_ms` round down to no pause at all.
+    pub activity_dwell_ms: u64,
+    /// Let a line that has stopped being driven finish its lap, so it comes
+    /// to rest at its first column rather than frozen mid-word wherever the
+    /// agent happened to stop. Turn it off to snap home in one frame.
+    pub activity_wind_down: bool,
     /// Where the line's words come from.
     pub activity_source: ActivitySource,
     /// Longest activity line kept, in characters, so one enormous tool
     /// description cannot become a scroll loop that takes a minute to come
     /// round.
     pub activity_max: usize,
+    /// How each tool call is worded, by the tool's name. `{}` is replaced by
+    /// the subject the plugin pulls out of the call - the file being read,
+    /// the pattern being searched for - and a template without it is used as
+    /// it stands, for calls that have no useful subject.
+    ///
+    /// Merged over the shipped table key by key, so naming one tool leaves
+    /// the rest alone. A tool with no entry, an empty template, or a `{}` the
+    /// plugin cannot fill shows the tool's own name, which still says more
+    /// than a blank row.
+    pub activity_verbs: BTreeMap<String, String>,
     /// Names the reported tokens are published under, referenced from herdr's
     /// sidebar layout as `$icon`, `$folder`, `$branch` and `$activity`. Rename
     /// them if they would collide with another plugin's tokens.
@@ -232,6 +288,18 @@ pub enum ActivitySource {
     Title,
 }
 
+/// Which way a scrolling activity line's words travel.
+///
+/// `Left` is the LED-sign direction: the words march leftwards out of the row
+/// while later ones arrive from the right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityDirection {
+    #[default]
+    Left,
+    Right,
+}
+
 /// Which panes animate their activity line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -249,6 +317,37 @@ pub enum ActivityScroll {
     Off,
 }
 
+/// The shipped phrasing for each tool call.
+///
+/// Kept beside the code that fills `{}` in, so the two stay in step: the list
+/// of tools the plugin knows how to pull a subject out of is the list below.
+fn default_verbs() -> BTreeMap<String, String> {
+    [
+        // Claude Code writes a description for most Bash calls, which reads
+        // better than anything generated from the command - so the template is
+        // the subject alone, and the plugin falls back to the command itself.
+        ("Bash", "{}"),
+        ("Read", "Reading {}"),
+        ("Edit", "Editing {}"),
+        ("NotebookEdit", "Editing {}"),
+        ("Write", "Writing {}"),
+        ("Grep", "Searching {}"),
+        ("Glob", "Finding {}"),
+        ("Task", "Delegating {}"),
+        ("Agent", "Delegating {}"),
+        ("Skill", "Running {}"),
+        ("WebFetch", "Fetching {}"),
+        ("WebSearch", "Searching {}"),
+        // No subject worth showing: a question is a question, and a todo list
+        // is too long to put in a row 20 columns wide.
+        ("AskUserQuestion", "Asking you"),
+        ("TodoWrite", "Planning"),
+    ]
+    .into_iter()
+    .map(|(tool, template)| (tool.to_string(), template.to_string()))
+    .collect()
+}
+
 impl Default for Sidebar {
     fn default() -> Self {
         Self {
@@ -258,13 +357,19 @@ impl Default for Sidebar {
             branch_indent: 0,
             // U+F07B nf-fa-folder, verified present in Hack Nerd Font.
             folder_glyph: "\u{f07b}".to_string(),
+            folder_glyph_position: GlyphPosition::Before,
             activity: true,
             activity_width: 20,
             activity_ms: 220,
             activity_gap: "   \u{2022}   ".to_string(),
             activity_scroll: ActivityScroll::Working,
+            activity_direction: ActivityDirection::Left,
+            activity_step: 1,
+            activity_dwell_ms: 0,
+            activity_wind_down: true,
             activity_source: ActivitySource::Transcript,
             activity_max: 60,
+            activity_verbs: default_verbs(),
             token_icon: "icon".to_string(),
             token_folder: "folder".to_string(),
             token_branch: "branch".to_string(),
@@ -306,6 +411,7 @@ impl Default for Label {
             show_git: true,
             show_folder: true,
             separator: " ".to_string(),
+            glyph_separator: " ".to_string(),
             max_length: 32,
             home_symbol: "~".to_string(),
             ellipsis: "\u{2026}".to_string(),
@@ -330,6 +436,7 @@ impl Default for Git {
             recheck_non_repo_ms: 10_000,
             position: GitPosition::AfterFolder,
             wrap: ["(".to_string(), ")".to_string()],
+            branch_glyph_position: GlyphPosition::Before,
         }
     }
 }
@@ -469,6 +576,51 @@ mod tests {
         assert_eq!(parsed, expected);
     }
 
+    /// Every key the code knows about must appear in the shipped file, and the
+    /// shipped file must invent none. It doubles as the reference manual, so a
+    /// key missing from it is a key nobody can discover - and the equality
+    /// check above cannot see the difference between "absent" and "same as the
+    /// default", which is exactly the case this catches.
+    #[test]
+    fn the_shipped_defaults_name_every_key() {
+        let shipped: Value = toml::from_str(include_str!("../config/default.toml")).unwrap();
+        let code = Value::try_from(Config::default()).expect("the config serializes");
+
+        let documented = paths(&shipped);
+        let missing: Vec<String> = paths(&code)
+            .into_iter()
+            .filter(|key| !documented.contains(key))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "config/default.toml does not mention {missing:?}"
+        );
+    }
+
+    /// Every leaf key in a TOML tree, as dotted paths.
+    fn paths(value: &Value) -> Vec<String> {
+        fn walk(value: &Value, prefix: &str, out: &mut Vec<String>) {
+            match value {
+                // An empty table has no keys to document - `apps` ships as
+                // commented-out examples rather than an entry.
+                Value::Table(table) => {
+                    for (key, child) in table {
+                        let path = if prefix.is_empty() {
+                            key.clone()
+                        } else {
+                            format!("{prefix}.{key}")
+                        };
+                        walk(child, &path, out);
+                    }
+                }
+                _ => out.push(prefix.to_string()),
+            }
+        }
+        let mut out = Vec::new();
+        walk(value, "", &mut out);
+        out
+    }
+
     /// The whole point of layering: a user file with one key keeps the rest of
     /// the shipped opinion rather than resetting the section.
     #[test]
@@ -503,6 +655,42 @@ mod tests {
         let cfg: Config = base.try_into().unwrap();
         assert_eq!(cfg.git.branch_max, 12, "untouched key survives");
         assert_eq!(cfg.git.default_branches, vec!["trunk".to_string()]);
+    }
+
+    /// A configuration written against the previous release must keep working,
+    /// and keep meaning the same thing.
+    ///
+    /// `deny_unknown_fields` makes a renamed or dropped key a hard error, so
+    /// the fixture parsing at all is most of the guarantee; the assertions
+    /// then pin the handful of values a new key could plausibly have changed
+    /// the meaning of. Update the fixture only alongside a major version.
+    #[test]
+    fn a_config_from_the_previous_version_still_loads_unchanged() {
+        let previous = include_str!("../tests/fixtures/config-0.2.0.toml");
+        let cfg: Config = toml::from_str(previous)
+            .unwrap_or_else(|e| panic!("a 0.2.0 configuration no longer loads: {e}"));
+
+        // Keys the previous version set keep their values.
+        assert_eq!(cfg.sidebar.activity_scroll, ActivityScroll::Working);
+        assert_eq!(cfg.sidebar.branch_indent, 0);
+        assert_eq!(cfg.sidebar.activity_ms, 220);
+        assert_eq!(cfg.git.branch_max, 12);
+        assert!(cfg.adoption.adopt_new_tabs);
+
+        // And keys it had never heard of default to what it used to do, so the
+        // sidebar looks the same the morning after an upgrade.
+        assert_eq!(cfg.label.glyph_separator, " ");
+        assert_eq!(cfg.git.branch_glyph_position, GlyphPosition::Before);
+        assert_eq!(cfg.sidebar.folder_glyph_position, GlyphPosition::Before);
+        assert_eq!(cfg.sidebar.activity_direction, ActivityDirection::Left);
+        assert_eq!(cfg.sidebar.activity_step, 1);
+        assert_eq!(cfg.sidebar.activity_dwell_ms, 0, "no pause, as before");
+        assert!(cfg.sidebar.activity_wind_down, "laps still finish");
+        assert_eq!(
+            cfg.sidebar.activity_verbs,
+            default_verbs(),
+            "the shipped phrasing is the phrasing 0.2.0 hard-coded"
+        );
     }
 
     /// `deny_unknown_fields` turns a typo into a silent fallback to defaults,
