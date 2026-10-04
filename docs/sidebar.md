@@ -75,7 +75,13 @@ the way the branch row below it does:
 `folder_glyph` sets it, defaulting to `` (nf-fa-folder). `` is the
 open folder, `` the Octicons directory, `` the Seti one - all four
 verified present in Hack Nerd Font. Set it to `""` to drop the glyph; the token
-then holds the bare folder name with no leading space.
+then holds the bare folder name with no separator left behind.
+
+`folder_glyph_position` moves it to the other side of the name
+(`"after"`) or drops it while keeping it in your config (`"off"`), and
+`label.glyph_separator` is what goes between the two. `git.branch_glyph_position`
+does the same for the row below. All of it is one table in
+[configuration.md](configuration.md#where-a-glyph-sits).
 
 This is **sidebar only**. A tab label already leads with the app icon, so a
 folder glyph there spends two of the tab bar's scarcest columns restating what
@@ -167,6 +173,51 @@ without it the line would lose a column and stutter as it scrolled.
 Nothing is written while every line fits: `activity_interval()` returns `None`
 and the daemon goes back to waiting on events.
 
+### How the motion is shaped
+
+```toml
+[sidebar]
+activity_ms        = 220      # one frame
+activity_step      = 1        # columns moved per frame
+activity_direction = "left"   # or "right"
+activity_dwell_ms  = 0        # rest at the start of each lap
+activity_wind_down = true     # finish the lap when the agent stops
+```
+
+**`activity_step`** is the cheap way to go faster. The cost is one write per
+moving line per frame whatever the step (see below), so three columns per frame
+covers three times the ground for the same price - at the cost of gliding less
+and jumping more. Halving `activity_ms` doubles the writes instead.
+
+**`activity_dwell_ms`** pauses at the start of each lap. The opening words are
+the ones that say what is happening, and at one column per 220ms they sweep
+past before you have focused on the row. The pause is counted in whole frames,
+so `1000` with the default frame holds for four of them (880ms) and anything
+under `220` is no pause at all. A paused line is not written, so the dwell is
+free - it is strictly cheaper than scrolling through it.
+
+Every lap ends **exactly** on the first column, even when the step would carry
+it past: walking home in threes from column 2 of a 5-column ring stops at 0
+rather than continuing to 1. Otherwise each lap would begin a column or two
+further along and the dwell would land somewhere different every time round.
+
+**`activity_wind_down`** is what happens when an agent stops working and
+`activity_scroll = "working"` stops driving its line. On, the window keeps
+going the way it was going until it reaches the start, so the text comes to
+rest at its beginning. Off, it snaps there in a single frame. Either way it
+rests at the beginning rather than frozen mid-word wherever the agent happened
+to finish - which is the whole point, since that line is then the record of
+what the agent last did.
+
+### What the words say
+
+`[sidebar.activity_verbs]` names each tool call: `Read = "Reading {}"`,
+`AskUserQuestion = "Asking you"`. The table decides the phrasing and the plugin
+decides the subject the `{}` is filled with - the file for `Read`, the pattern
+for `Grep`, the written description for `Bash`. The full list, and how to name
+a tool the plugin has never heard of, is in
+[configuration.md](configuration.md#sidebaractivity_verbs).
+
 ### What it costs
 
 Every step is one `pane.report_metadata` write per scrolling pane, and each one
@@ -221,6 +272,21 @@ Both `$folder` and `$branch` are a glyph, a space and a name, and rows 2 and 3
 share an indent, so `branch_indent = 0` lines them up. Move the folder back up
 beside the icon and it needs 2, because the icon and its separator push that row
 2 columns right.
+
+The glyph positions feed the same sum. A glyph plus `label.glyph_separator` is
+what puts a name two columns in, so moving one mark and not the other shifts
+one row relative to the other:
+
+| | `$folder` starts at | `$branch` starts at |
+|---|---|---|
+| shipped (`"before"`, `"before"`) | 3 | 3 + `branch_indent` |
+| branch glyph `"after"` or `"off"` | 3 | 1 + `branch_indent` |
+| folder glyph `"after"` or `"off"` | 1 | 3 + `branch_indent` |
+| `glyph_separator = ""` | 2 | 2 + `branch_indent` |
+
+So `branch_glyph_position = "after"` wants `branch_indent = 2` to keep the two
+names in one column, and moving *both* marks needs no change at all. There are
+ready-made blocks for these in [recipes.md](recipes.md#glyphs).
 
 ## Empty rows
 

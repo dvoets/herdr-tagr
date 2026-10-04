@@ -47,10 +47,6 @@ show_icon = true
 show_git = true
 show_folder = true
 separator = " "
-# Sits between a glyph and the name it marks, wherever the two are joined: the
-# git fragment in a tab label, and the folder and branch tokens in the sidebar.
-# "" butts them together, "  " opens them up.
-glyph_separator = " "
 # Hard cap on the rendered label, in characters.
 max_length = 32
 home_symbol = "~"
@@ -99,18 +95,6 @@ repo_glyph = "\uf401"      # nf-oct-repo
 branch_glyph = "\ue725"    # nf-dev-git_branch
 detached_glyph = "\uf417"  # nf-oct-git_commit
 detached_len = 7
-
-# Which side of the branch name (or short commit) its glyph sits on - in the
-# tab label and in the sidebar's branch token alike.
-#
-#   "before" (default)  \ue725 feat/auth
-#   "after"             feat/auth \ue725
-#   "off"               feat/auth        - the name alone, glyph kept in config
-#
-# "before" is what sidebar.branch_indent is measured against: moving the glyph
-# to the other side moves the name two columns left, so raise the indent by the
-# same amount to keep the branch under the folder.
-branch_glyph_position = "before"
 
 # How long a directory stays remembered as "not a repository", so a git init or
 # a finished clone is picked up without restarting the daemon.
@@ -171,12 +155,6 @@ branch_indent = 0
 # not already say.
 folder_glyph = "\uf07b"
 
-# Which side of the folder name its glyph sits on, taking the same three values
-# as git.branch_glyph_position. "before" is what puts it in the same column as
-# the branch glyph on the row below, which is why the two rows read as a pair;
-# "off" keeps the glyph in your config while dropping it from the row.
-folder_glyph_position = "before"
-
 # Publishes what the agent is doing as its own token, taken from herdr's
 # terminal_title_stripped - the title Claude Code sets, which is the session's
 # subject ("Laptop performance issue"). Only agent panes get it: a plain
@@ -210,29 +188,6 @@ activity_gap = "   \u2022   "
 # which is why "always" is not the default: see docs/sidebar.md.
 activity_scroll = "working"
 
-# Which way the words travel. "left" is the LED-sign direction: words march
-# leftwards out of the row while later ones arrive from the right. "right"
-# reverses it, which reads oddly for text but is there if you want it.
-activity_direction = "left"
-
-# Columns moved per frame. Raising this scrolls faster without costing any more
-# writes - the cost is one write per frame whatever the step - at the price of
-# smoothness: 1 glides, 3 visibly jumps. 0 is read as 1.
-activity_step = 1
-
-# How long to rest at the start of every lap, so the opening words - which are
-# the ones that say what is happening - can be read before the line sets off.
-#
-# Counted in whole frames of activity_ms, so anything under one frame is no
-# pause at all: with the default 220ms frame, 1000 holds for 4 frames (880ms).
-# The pause costs nothing, since a line that is not moving is not written.
-activity_dwell_ms = 0
-
-# Let a line that has stopped being driven finish its lap, so it comes to rest
-# at its first column rather than frozen mid-word wherever the agent stopped.
-# false snaps it home in a single frame instead.
-activity_wind_down = true
-
 # Where the line's words come from.
 #
 #   "transcript" (default)  what the agent is doing now, read from Claude
@@ -263,50 +218,6 @@ token_icon = "icon"
 token_folder = "folder"
 token_branch = "branch"
 token_activity = "activity"
-
-# How each tool call is worded on the activity line, by the tool's name.
-#
-# `{}` is replaced by whatever that tool acts on - the plugin knows where each
-# one keeps it:
-#
-#   Bash                  the call's own written description, else the command
-#                         reduced to its program and first real argument
-#   Read Edit Write       the file's name, without its path
-#   NotebookEdit          the same
-#   Grep Glob             the pattern
-#   Task Agent            the subagent's description
-#   Skill                 the skill's name
-#   WebFetch              the URL's host
-#   WebSearch             the query
-#   anything else         the first of description, file_path, pattern, query,
-#                         url or command that the call carries
-#
-# A template with no `{}` is used as it stands, which is how AskUserQuestion
-# and TodoWrite get a fixed phrase. Entries are merged one key at a time, so
-# renaming one tool leaves the other thirteen alone:
-#
-#   [sidebar.activity_verbs]
-#   Read = "Looking at {}"
-#   Grep = "Hunting for {}"
-#
-# A tool with no entry here shows its own bare name ("WebFetch"), and so does
-# one whose `{}` cannot be filled - a new tool still gets a row rather than
-# blanking it. Setting a template to "" opts a tool back into that fallback.
-[sidebar.activity_verbs]
-Bash = "{}"
-Read = "Reading {}"
-Edit = "Editing {}"
-NotebookEdit = "Editing {}"
-Write = "Writing {}"
-Grep = "Searching {}"
-Glob = "Finding {}"
-Task = "Delegating {}"
-Agent = "Delegating {}"
-Skill = "Running {}"
-WebFetch = "Fetching {}"
-WebSearch = "Searching {}"
-AskUserQuestion = "Asking you"
-TodoWrite = "Planning"
 
 [ssh]
 enabled = true
