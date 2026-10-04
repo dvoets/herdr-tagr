@@ -42,8 +42,10 @@ to get the behaviour above. Override any key in your own config:
 $EDITOR "$(herdr plugin config-dir herdr-tagr)/config.toml"
 ```
 
-Your file only needs the keys you disagree with. One part cannot ship this way:
-the sidebar layout and the new-tab prompt live in *herdr's* config, and are in
+Your file only needs the keys you disagree with - and
+[docs/recipes.md](docs/recipes.md) has those keys already assembled into blocks
+you can paste. One part cannot ship this way: the sidebar layout and the
+new-tab prompt live in *herdr's* config, and are in
 [config/herdr.toml](config/herdr.toml) to copy across.
 
 Requires herdr 0.7.5+, a Rust toolchain (1.85+) at install time, and a
@@ -174,6 +176,10 @@ too. The folder leads with a `` of its own and the branch sits directly
 under it, glyph beneath glyph and name beneath name. The folder glyph is
 sidebar-only, since a tab label already starts with the app icon.
 
+Either mark can move to the other side of its name or go away entirely
+(`folder_glyph_position`, `branch_glyph_position`), and `glyph_separator`
+sets what sits between a glyph and the name it marks.
+
 The first row says what the agent is *doing*, read from Claude Code's own
 session transcript - the newest tool call, in a few words ("Run the suite",
 "Editing label.rs"), falling back to the session title whenever there is
@@ -186,7 +192,31 @@ row and sit still, so the panel never reflows. `activity_scroll` takes
 `"always"` and `"off"` too; [docs/sidebar.md](docs/sidebar.md) has the
 measurements.
 
-Setup and the column arithmetic: [docs/sidebar.md](docs/sidebar.md).
+How it moves is yours: speed and columns per step, which way the words travel,
+a pause at the start of each lap so the opening words can be read, and whether
+a line that has stopped finishes its lap or snaps back.
+
+```toml
+[sidebar]
+activity_dwell_ms = 1200   # rest at the start of each lap
+activity_step     = 2      # twice the ground, same number of writes
+```
+
+And so is what it says. Each tool call is worded by a table, `{}` standing for
+whatever that call acts on:
+
+```toml
+[sidebar.activity_verbs]
+Read = "Looking at {}"
+Grep = "Hunting for {}"
+```
+
+Naming one tool leaves the other thirteen alone, and a tool the plugin has
+never heard of - an MCP server's, say - can be given words the same way.
+
+Setup, the column arithmetic and what scrolling costs:
+[docs/sidebar.md](docs/sidebar.md). Blocks to paste:
+[docs/recipes.md](docs/recipes.md).
 
 ## Commands
 
@@ -206,12 +236,14 @@ every process herdr reported and the rank each one matched.
 | | |
 |---|---|
 | [docs/configuration.md](docs/configuration.md) | Every option, what it does, and why the default is what it is |
+| [docs/recipes.md](docs/recipes.md) | Working blocks to paste: a calmer sidebar, a readable scroll, no Nerd Font, your own wording |
 | [config/default.toml](config/default.toml) | The shipped defaults, applied automatically |
 | [config/herdr.toml](config/herdr.toml) | The herdr-side half: sidebar layout and the new-tab prompt |
 | [docs/sidebar.md](docs/sidebar.md) | Feeding and colouring herdr's agent panel |
 | [docs/architecture.md](docs/architecture.md) | How the daemon works, and what herdr's API does and does not allow |
 | [docs/platforms.md](docs/platforms.md) | Linux, macOS, Windows, WSL - and what is verified on each |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | When a tab shows the wrong thing |
+| [CHANGELOG.md](CHANGELOG.md) | What changed, and what it means for an existing config |
 
 ## Credits
 
