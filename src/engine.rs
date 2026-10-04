@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::config::{ActivityScroll, ActivitySource, Config};
+use crate::config::{ActivityDirection, ActivityScroll, ActivitySource, Config};
 use crate::detect::{self, Detected, ProcessInfo};
 use crate::git;
 use crate::icons::{self, App};
@@ -152,18 +152,78 @@ struct Marquee {
     /// Whether this pane is allowed to animate: the text overflows the window
     /// and `activity_scroll` admits its status.
     scrolls: bool,
+    /// Frames left to sit still at the start of a lap, from
+    /// `activity_dwell_ms`. Counted in frames rather than kept as a deadline
+    /// so the dwell stays in step with the animation clock.
+    hold: u32,
+}
+
+/// One frame's worth of movement, gathered from the configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Motion {
+    /// Still being driven: the text overflows and `activity_scroll` admits
+    /// this pane's status.
+    scrolls: bool,
+    /// Columns per frame, from `activity_step`.
+    columns: usize,
+    /// Words travel rightwards, so the window walks backwards through the
+    /// ring. From `activity_direction`.
+    right: bool,
+    /// Finish the lap when no longer driven, rather than snapping home. From
+    /// `activity_wind_down`.
+    wind_down: bool,
 }
 
 /// Where a marquee's window goes next, or `None` when it should stop.
 ///
-/// A pane that has stopped scrolling still finishes its lap: the window keeps
-/// advancing until it wraps back to the start, so the text comes to rest at the
-/// beginning rather than frozen mid-word wherever the agent happened to finish.
-fn next_offset(scrolls: bool, offset: usize, ring: usize) -> Option<usize> {
-    if !scrolls && offset == 0 {
-        return None;
+/// A pane that has stopped scrolling still finishes its lap by default: the
+/// window keeps going the way it was going until it reaches the start, so the
+/// text comes to rest at its first column rather than frozen mid-word wherever
+/// the agent happened to finish. `wind_down = false` snaps it home in one
+/// frame instead.
+///
+/// A step never lands past the start. Walking home in threes from column 2
+/// stops at 0 rather than carrying on to 1, which keeps every lap beginning at
+/// the same place however wide the step is - and so keeps the dwell, which
+/// triggers there, over the opening words.
+fn next_offset(motion: Motion, offset: usize, ring: usize) -> Option<usize> {
+    let ring = ring.max(1);
+    let columns = motion.columns.max(1).min(ring);
+
+    if !motion.scrolls {
+        if offset == 0 {
+            return None;
+        }
+        if !motion.wind_down {
+            return Some(0);
+        }
     }
-    Some((offset + 1) % ring.max(1))
+
+    // Only a step taken from somewhere else can arrive at the start; from the
+    // start itself there is a whole lap to go first.
+    let arrives_home = offset != 0
+        && if motion.right {
+            offset <= columns
+        } else {
+            offset + columns >= ring
+        };
+    Some(if arrives_home {
+        0
+    } else if motion.right {
+        (offset + ring - columns) % ring
+    } else {
+        (offset + columns) % ring
+    })
+}
+
+/// `activity_dwell_ms` in whole animation frames.
+///
+/// The dwell is counted in frames rather than kept as a deadline, so it stays
+/// in step with the animation clock however `activity_ms` is set - at the cost
+/// of rounding down, which is why a dwell shorter than one frame is no dwell.
+fn dwell_frames(cfg: &crate::config::Sidebar) -> u32 {
+    let frame = cfg.activity_ms.max(40);
+    u32::try_from(cfg.activity_dwell_ms / frame).unwrap_or(u32::MAX)
 }
 
 /// The slice of `text` visible at `offset`, or the whole of it when it fits.
@@ -391,8 +451,11 @@ impl Engine {
     /// `None` for anything that is not an agent: a plain shell's title is its
     /// prompt (`daan@host:~/Downloads`), which would fill the row with noise.
     fn activity_frame(&mut self, pane: &Pane) -> Option<String> {
+        // Picked up here rather than at startup, so editing the table takes
+        // effect on the next pass like every other key.
+        self.activity.set_verbs(&self.cfg.sidebar.activity_verbs);
         // Copied out before the tracker below needs &mut self.
-        let (width, gap, scroll, source, max) = {
+        let (width, gap, scroll, source, max, dwell) = {
             let cfg = &self.cfg.sidebar;
             (
                 cfg.activity_width,
@@ -400,6 +463,7 @@ impl Engine {
                 cfg.activity_scroll,
                 cfg.activity_source,
                 cfg.activity_max,
+                dwell_frames(cfg),
             )
         };
         let status = pane.agent_status.as_deref().unwrap_or("unknown");
@@ -446,12 +510,15 @@ impl Engine {
                 text: text.to_string(),
                 offset: 0,
                 scrolls,
+                // A new line dwells before it sets off, like every later lap.
+                hold: dwell,
             });
         // A new title starts from the left rather than wherever the old one
         // happened to have scrolled to.
         if entry.text != text {
             entry.text = text.to_string();
             entry.offset = 0;
+            entry.hold = dwell;
         }
         entry.scrolls = scrolls;
         // Nothing to wind down when the text now fits, and no lap will ever
@@ -471,10 +538,11 @@ impl Engine {
         if !cfg.activity || cfg.activity_scroll == ActivityScroll::Off {
             return None;
         }
-        // A pane that has stopped scrolling is still owed the rest of its lap.
+        // A pane that has stopped scrolling is still owed the rest of its lap,
+        // and one resting at the start of a lap is owed the rest of its dwell.
         self.marquees
             .values()
-            .any(|m| m.scrolls || m.offset != 0)
+            .any(|m| m.scrolls || m.offset != 0 || m.hold > 0)
             .then(|| Duration::from_millis(cfg.activity_ms.max(40)))
     }
 
@@ -484,21 +552,40 @@ impl Engine {
     /// Deliberately does not take a snapshot: a frame several times a second
     /// must not cost a round trip for the whole session.
     pub fn animate(&mut self) -> Vec<String> {
-        let (width, gap, token) = {
+        let (width, gap, token, dwell, step, right, wind_down) = {
             let cfg = &self.cfg.sidebar;
             (
                 cfg.activity_width,
                 cfg.activity_gap.clone(),
                 cfg.token_activity.clone(),
+                dwell_frames(cfg),
+                cfg.activity_step.max(1),
+                cfg.activity_direction == ActivityDirection::Right,
+                cfg.activity_wind_down,
             )
         };
         let mut frames: Vec<(String, String)> = Vec::new();
         for (pane_id, marquee) in self.marquees.iter_mut() {
+            // Resting at the start of a lap: no movement, and so no write.
+            if marquee.hold > 0 {
+                marquee.hold -= 1;
+                continue;
+            }
+            let motion = Motion {
+                scrolls: marquee.scrolls,
+                columns: step,
+                right,
+                wind_down,
+            };
             let ring = marquee.text.chars().count() + gap.chars().count();
-            let Some(offset) = next_offset(marquee.scrolls, marquee.offset, ring) else {
+            let Some(offset) = next_offset(motion, marquee.offset, ring) else {
                 continue;
             };
             marquee.offset = offset;
+            // Back at the beginning with more laps to come: pause there.
+            if offset == 0 && marquee.scrolls {
+                marquee.hold = dwell;
+            }
             frames.push((
                 pane_id.clone(),
                 window(&marquee.text, width, marquee.offset, &gap),
@@ -701,6 +788,16 @@ fn config_mtime() -> Option<std::time::SystemTime> {
 mod tests {
     use super::*;
 
+    /// The shipped motion: one column per frame, leftwards, winding down.
+    fn motion(scrolls: bool) -> Motion {
+        Motion {
+            scrolls,
+            columns: 1,
+            right: false,
+            wind_down: true,
+        }
+    }
+
     const GAP: &str = "   \u{2022}   ";
 
     #[test]
@@ -751,15 +848,15 @@ mod tests {
     #[test]
     fn a_stopped_marquee_finishes_its_lap_and_rests_at_the_start() {
         // Still working: it keeps going, wrapping as it goes.
-        assert_eq!(next_offset(true, 0, 5), Some(1));
-        assert_eq!(next_offset(true, 4, 5), Some(0));
-        assert_eq!(next_offset(true, 0, 5), Some(1));
+        assert_eq!(next_offset(motion(true), 0, 5), Some(1));
+        assert_eq!(next_offset(motion(true), 4, 5), Some(0));
+        assert_eq!(next_offset(motion(true), 0, 5), Some(1));
 
         // Stopped mid-text: advance to the end of the lap, then stop dead -
         // rather than freezing mid-word wherever the agent finished.
         let mut offset = 2;
         let mut steps = 0;
-        while let Some(next) = next_offset(false, offset, 5) {
+        while let Some(next) = next_offset(motion(false), offset, 5) {
             offset = next;
             steps += 1;
             assert!(steps < 10, "wind-down must terminate");
@@ -770,9 +867,82 @@ mod tests {
 
     #[test]
     fn a_marquee_already_at_the_start_does_not_move() {
-        assert_eq!(next_offset(false, 0, 5), None);
+        assert_eq!(next_offset(motion(false), 0, 5), None);
         // A degenerate ring must not divide by zero.
-        assert_eq!(next_offset(true, 0, 0), Some(0));
+        assert_eq!(next_offset(motion(true), 0, 0), Some(0));
+    }
+
+    #[test]
+    fn rightward_scrolling_walks_the_ring_backwards() {
+        let right = Motion {
+            right: true,
+            ..motion(true)
+        };
+        // From the start there is a whole lap to go, so it wraps to the end.
+        assert_eq!(next_offset(right, 0, 5), Some(4));
+        assert_eq!(next_offset(right, 4, 5), Some(3));
+        // And coming back round it stops at the start rather than through it.
+        assert_eq!(next_offset(right, 1, 5), Some(0));
+        assert_eq!(next_offset(right, 0, 5), Some(4));
+    }
+
+    #[test]
+    fn a_wide_step_still_lands_exactly_on_the_start() {
+        // Every lap has to begin at column 0 whatever the step, or the dwell
+        // would land somewhere different each time round.
+        for columns in 1..=4 {
+            let wide = Motion {
+                columns,
+                ..motion(true)
+            };
+            let mut offset = 0;
+            for _ in 0..20 {
+                offset = next_offset(wide, offset, 5).expect("a driven line keeps going");
+            }
+            let mut seen_start = false;
+            for _ in 0..10 {
+                offset = next_offset(wide, offset, 5).expect("a driven line keeps going");
+                seen_start |= offset == 0;
+            }
+            assert!(seen_start, "step of {columns} never came back to the start");
+        }
+
+        // Walking home in threes from column 3 of 5 stops at 0, not 1.
+        let wide = Motion {
+            columns: 3,
+            ..motion(false)
+        };
+        assert_eq!(next_offset(wide, 3, 5), Some(0));
+        assert_eq!(next_offset(wide, 0, 5), None);
+    }
+
+    #[test]
+    fn without_wind_down_a_stopped_line_snaps_home() {
+        let abrupt = Motion {
+            wind_down: false,
+            ..motion(false)
+        };
+        assert_eq!(next_offset(abrupt, 3, 5), Some(0), "one frame, not a lap");
+        assert_eq!(next_offset(abrupt, 0, 5), None);
+    }
+
+    #[test]
+    fn a_dwell_is_counted_in_whole_frames() {
+        let cfg = |ms: u64, dwell: u64| crate::config::Sidebar {
+            activity_ms: ms,
+            activity_dwell_ms: dwell,
+            ..Default::default()
+        };
+        assert_eq!(dwell_frames(&cfg(220, 0)), 0, "the shipped default");
+        assert_eq!(dwell_frames(&cfg(220, 1000)), 4, "4 frames of 220ms");
+        assert_eq!(
+            dwell_frames(&cfg(220, 100)),
+            0,
+            "shorter than a frame is no pause at all"
+        );
+        // activity_ms has a 40ms floor, and the dwell has to respect it or it
+        // would divide by something the animation never actually runs at.
+        assert_eq!(dwell_frames(&cfg(0, 400)), 10);
     }
 
     #[test]

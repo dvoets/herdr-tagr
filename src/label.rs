@@ -18,7 +18,7 @@
 
 use std::path::Path;
 
-use crate::config::{Config, DefaultBranchStyle, GitPosition};
+use crate::config::{Config, DefaultBranchStyle, GitPosition, GlyphPosition};
 use crate::detect::Detected;
 use crate::git::{Cache, Head};
 use crate::icons::Kind;
@@ -83,7 +83,7 @@ pub fn render(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> String {
     // apart from, so it stands alone unwrapped.
     if folder.is_none() {
         if let Some((glyph, name)) = &named {
-            leading = Some(join_glyph(glyph, name));
+            leading = Some(join_glyph(glyph, name, cfg.git.branch_glyph_position, cfg));
         }
     }
 
@@ -95,7 +95,7 @@ pub fn render(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> String {
             let wrapped = format!(
                 "{}{}{}",
                 cfg.git.wrap[0],
-                join_glyph(glyph, name),
+                join_glyph(glyph, name, cfg.git.branch_glyph_position, cfg),
                 cfg.git.wrap[1]
             );
             match cfg.git.position {
@@ -151,11 +151,18 @@ fn git_segments(repo: &crate::git::Repo, cfg: &Config) -> GitSegments {
     }
 }
 
-fn join_glyph(glyph: &str, name: &str) -> String {
-    if glyph.is_empty() {
-        name.to_string()
-    } else {
-        format!("{glyph} {name}")
+/// Puts a glyph beside the name it marks, on the configured side.
+///
+/// An empty glyph and `GlyphPosition::Off` both give the bare name, with no
+/// stray separator left behind - so dropping a mark is one key either way.
+fn join_glyph(glyph: &str, name: &str, position: GlyphPosition, cfg: &Config) -> String {
+    if glyph.is_empty() || position == GlyphPosition::Off {
+        return name.to_string();
+    }
+    let gap = &cfg.label.glyph_separator;
+    match position {
+        GlyphPosition::After => format!("{name}{gap}{glyph}"),
+        _ => format!("{glyph}{gap}{name}"),
     }
 }
 
@@ -185,6 +192,8 @@ pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
                 folder: Some(join_glyph(
                     &cfg.sidebar.folder_glyph,
                     &ssh_segment(host, ctx, cfg),
+                    cfg.sidebar.folder_glyph_position,
+                    cfg,
                 )),
                 branch: None,
             };
@@ -194,10 +203,14 @@ pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
     // The glyph leads the folder here but not in the tab label: it puts the
     // folder's mark in the same column as the branch glyph on the row below,
     // so the two rows read as a pair.
-    let folder = ctx
-        .folder(cfg)
-        .filter(|f| !f.is_empty())
-        .map(|f| join_glyph(&cfg.sidebar.folder_glyph, &f));
+    let folder = ctx.folder(cfg).filter(|f| !f.is_empty()).map(|f| {
+        join_glyph(
+            &cfg.sidebar.folder_glyph,
+            &f,
+            cfg.sidebar.folder_glyph_position,
+            cfg,
+        )
+    });
     // U+2800 BRAILLE PATTERN BLANK, not a space: herdr trims whitespace off
     // token values, and every actual space character is Unicode White_Space.
     // The braille blank is punctuation as far as trimming is concerned and
@@ -206,14 +219,19 @@ pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
     let branch = ctx
         .cwd
         .and_then(|c| git.repo(Path::new(c), cfg))
-        .map(|repo| match &repo.head {
-            Head::Branch(b) => join_glyph(&cfg.git.branch_glyph, b),
-            Head::Detached(sha) => join_glyph(
-                &cfg.git.detached_glyph,
-                &sha.chars()
-                    .take(cfg.git.detached_len.max(4))
-                    .collect::<String>(),
-            ),
+        .map(|repo| {
+            let side = cfg.git.branch_glyph_position;
+            match &repo.head {
+                Head::Branch(b) => join_glyph(&cfg.git.branch_glyph, b, side, cfg),
+                Head::Detached(sha) => join_glyph(
+                    &cfg.git.detached_glyph,
+                    &sha.chars()
+                        .take(cfg.git.detached_len.max(4))
+                        .collect::<String>(),
+                    side,
+                    cfg,
+                ),
+            }
         })
         .map(|b| format!("{indent}{b}"));
 
@@ -392,7 +410,7 @@ mod tests {
             let wrapped = format!(
                 "{}{}{}",
                 cfg.git.wrap[0],
-                join_glyph(&glyph, &name),
+                join_glyph(&glyph, &name, cfg.git.branch_glyph_position, cfg),
                 cfg.git.wrap[1]
             );
             match cfg.git.position {
@@ -524,6 +542,63 @@ mod tests {
         };
         let t = tokens(&ctx(&d, Some("/tmp"), None), &cfg, &mut git);
         assert_eq!(t.folder.as_deref(), Some("\u{f07b} tmp"));
+    }
+
+    #[test]
+    fn the_folder_glyph_can_change_sides_or_leave() {
+        let d = Detected {
+            app: app("shell", "I", Kind::Shell),
+            ssh_host: None,
+        };
+        let folder = |cfg: &Config| {
+            tokens(&ctx(&d, Some("/tmp"), None), cfg, &mut Cache::default())
+                .folder
+                .unwrap_or_default()
+        };
+
+        let mut cfg = Config::default();
+        cfg.sidebar.folder_glyph_position = GlyphPosition::After;
+        assert_eq!(folder(&cfg), "tmp \u{f07b}");
+
+        cfg.sidebar.folder_glyph_position = GlyphPosition::Off;
+        assert_eq!(folder(&cfg), "tmp", "and no separator left behind");
+
+        // An empty glyph says the same thing, so the two agree.
+        cfg.sidebar.folder_glyph_position = GlyphPosition::Before;
+        cfg.sidebar.folder_glyph = String::new();
+        assert_eq!(folder(&cfg), "tmp");
+    }
+
+    #[test]
+    fn the_glyph_separator_applies_wherever_a_glyph_meets_a_name() {
+        let mut cfg = Config::default();
+        cfg.label.glyph_separator = String::new();
+        let d = Detected {
+            app: app("shell", "I", Kind::Shell),
+            ssh_host: None,
+        };
+        let t = tokens(&ctx(&d, Some("/tmp"), None), &cfg, &mut Cache::default());
+        assert_eq!(t.folder.as_deref(), Some("\u{f07b}tmp"));
+
+        // And in the tab label's git fragment, which is the other place the
+        // two are joined.
+        let repo = repo(Head::Branch("feat/auth".to_string()), "main");
+        assert_eq!(
+            label_with(&repo, "api", &cfg),
+            "I api (\u{e725}feat/auth)",
+            "one separator setting, both places"
+        );
+    }
+
+    #[test]
+    fn the_branch_glyph_can_change_sides() {
+        let mut cfg = Config::default();
+        cfg.git.branch_glyph_position = GlyphPosition::After;
+        let repo = repo(Head::Branch("feat/auth".to_string()), "main");
+        assert_eq!(label_with(&repo, "api", &cfg), "I api (feat/auth \u{e725})");
+
+        cfg.git.branch_glyph_position = GlyphPosition::Off;
+        assert_eq!(label_with(&repo, "api", &cfg), "I api (feat/auth)");
     }
 
     #[test]
