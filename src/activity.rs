@@ -16,7 +16,7 @@
 //! field that has moved, or a file that is not there all degrade to `None`,
 //! and the caller falls back to the session title.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -28,14 +28,22 @@ use serde_json::Value;
 /// few exchanges, small enough that a multi-megabyte session costs nothing.
 const FIRST_READ_BYTES: u64 = 64 * 1024;
 
+/// Tool name to phrasing template, from `sidebar.activity_verbs`.
+type Verbs = BTreeMap<String, String>;
+
 /// How long to wait before looking again for a transcript that was not found,
 /// so a pane that is not Claude does not stat the filesystem on every pass.
 const RESOLVE_RETRY: Duration = Duration::from_secs(30);
 
 /// Per-session transcript readers.
+///
+/// Holds its own copy of the phrasing table rather than taking it on every
+/// call: it is read once per transcript line, and `set_verbs` only copies when
+/// the configuration has actually changed under it.
 #[derive(Default)]
 pub struct Tracker {
     sessions: HashMap<String, Session>,
+    verbs: BTreeMap<String, String>,
 }
 
 struct Session {
@@ -51,6 +59,16 @@ struct Session {
 }
 
 impl Tracker {
+    /// Adopts the configured phrasing, copying only when it has changed.
+    ///
+    /// Cheap enough to call on every pass, which is what keeps an edited
+    /// `activity_verbs` table live without restarting the daemon.
+    pub fn set_verbs(&mut self, verbs: &BTreeMap<String, String>) {
+        if self.verbs != *verbs {
+            self.verbs = verbs.clone();
+        }
+    }
+
     /// What the session is doing now, or `None` when there is nothing to read.
     ///
     /// `cwd` only speeds up finding the transcript; the id alone is enough.
@@ -73,7 +91,7 @@ impl Tracker {
         }
 
         if let Some(path) = session.path.clone() {
-            if let Some(found) = newest_activity(&path, &mut session.offset) {
+            if let Some(found) = newest_activity(&path, &mut session.offset, &self.verbs) {
                 session.last = Some(found);
             }
         }
@@ -127,7 +145,7 @@ fn transcript(session_id: &str, cwd: Option<&str>) -> Option<PathBuf> {
 
 /// Reads whatever has been appended since `offset` and returns the newest
 /// activity in it, advancing `offset` past the last complete line.
-fn newest_activity(path: &Path, offset: &mut u64) -> Option<String> {
+fn newest_activity(path: &Path, offset: &mut u64, verbs: &Verbs) -> Option<String> {
     let mut file = File::open(path).ok()?;
     let len = file.metadata().ok()?.len();
 
@@ -168,7 +186,7 @@ fn newest_activity(path: &Path, offset: &mut u64) -> Option<String> {
 
     let mut newest = None;
     for line in slice[..end].split(|b| *b == b'\n') {
-        if let Some(found) = activity_in(line) {
+        if let Some(found) = activity_in(line, verbs) {
             newest = Some(found);
         }
     }
@@ -176,7 +194,7 @@ fn newest_activity(path: &Path, offset: &mut u64) -> Option<String> {
 }
 
 /// The activity described by one transcript line, if it holds a tool call.
-fn activity_in(line: &[u8]) -> Option<String> {
+fn activity_in(line: &[u8], verbs: &Verbs) -> Option<String> {
     if line.is_empty() {
         return None;
     }
@@ -195,59 +213,93 @@ fn activity_in(line: &[u8]) -> Option<String> {
             describe(
                 block.get("name").and_then(Value::as_str)?,
                 block.get("input")?,
+                verbs,
             )
         })
         .next_back()
 }
 
-/// A few words for one tool call.
+/// A few words for one tool call, worded by the configured table.
 ///
-/// `Bash` carries a written description already, which is why it reads best;
-/// the rest get a verb and the thing they act on.
-fn describe(name: &str, input: &Value) -> Option<String> {
+/// The table decides the phrasing and the code decides the subject: a
+/// template's `{}` is filled with whatever that particular tool acts on - the
+/// file for `Read`, the pattern for `Grep`, the written description for
+/// `Bash`. A template with no `{}` ignores the subject entirely.
+///
+/// Anything the table does not name, and anything whose `{}` cannot be
+/// filled, falls back to the tool's own name: a new tool, or one whose input
+/// fields have moved, shows up as itself rather than vanishing from the row.
+fn describe(name: &str, input: &Value, verbs: &Verbs) -> Option<String> {
+    let fallback = || Some(name.to_string());
+    let template = match verbs.get(name) {
+        Some(template) if !template.trim().is_empty() => template.as_str(),
+        _ => return fallback(),
+    };
+    if !template.contains("{}") {
+        return Some(template.to_string());
+    }
+    match subject(name, input) {
+        Some(subject) => Some(template.replace("{}", &subject)),
+        None => fallback(),
+    }
+}
+
+/// What a tool call is acting on, for the `{}` in its template.
+///
+/// Every tool keeps its argument under its own key, so this is a table of
+/// where to look rather than anything clever. A tool that is not listed gets
+/// the generic sweep below, which is what lets a template be added for a tool
+/// the plugin has never heard of.
+fn subject(name: &str, input: &Value) -> Option<String> {
     let field = |key: &str| {
         input
             .get(key)
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|text| !text.is_empty())
+            .map(str::to_string)
     };
-    let base = |key: &str| field(key).map(|path| path.rsplit('/').next().unwrap_or(path));
+    let base = |key: &str| field(key).map(|path| last_segment(&path, '/'));
 
-    let described = match name {
+    match name {
         // A description is written for most calls but is not guaranteed, and
         // bare "Bash" says nothing - so fall back to the command itself.
-        "Bash" => field("description")
-            .map(str::to_string)
-            .or_else(|| field("command").map(command_gist)),
-        "Read" => base("file_path").map(|f| format!("Reading {f}")),
-        "Edit" | "NotebookEdit" => base("file_path").map(|f| format!("Editing {f}")),
-        "Write" => base("file_path").map(|f| format!("Writing {f}")),
-        "Grep" => field("pattern").map(|p| format!("Searching {p}")),
-        "Glob" => field("pattern").map(|p| format!("Finding {p}")),
-        "Task" | "Agent" => field("description").map(|d| format!("Delegating {d}")),
-        "Skill" => field("skill").map(|s| format!("Running {s}")),
-        "WebFetch" => field("url")
-            .map(|u| u.split('/').nth(2).unwrap_or(u).to_string())
-            .map(|host| format!("Fetching {host}")),
-        "WebSearch" => field("query").map(|q| format!("Searching {q}")),
-        "AskUserQuestion" => Some("Asking you".to_string()),
-        "TodoWrite" => Some("Planning".to_string()),
-        _ => None,
-    };
-    // An unrecognised tool still says more than nothing: a new tool name, or
-    // one whose fields have moved, shows up as itself rather than vanishing.
-    described.or_else(|| Some(name.to_string()))
+        "Bash" => field("description").or_else(|| field("command").map(|c| command_gist(&c))),
+        "Read" | "Edit" | "NotebookEdit" | "Write" => base("file_path"),
+        "Grep" | "Glob" => field("pattern"),
+        "Task" | "Agent" => field("description"),
+        "Skill" => field("skill"),
+        "WebFetch" => field("url").map(|url| host_of(&url)),
+        "WebSearch" => field("query"),
+        // An unlisted tool - an MCP server's, or one newer than this plugin.
+        // The keys below are the ones tools conventionally use, tried in the
+        // order that gives the most readable line.
+        _ => field("description")
+            .or_else(|| base("file_path"))
+            .or_else(|| field("pattern"))
+            .or_else(|| field("query"))
+            .or_else(|| field("url").map(|url| host_of(&url)))
+            .or_else(|| field("command").map(|c| command_gist(&c))),
+    }
 }
 
-/// The useful head of a shell command: the program, plus its first argument
-/// when that is not a flag, so `git commit -m ...` reads as "git commit".
+/// The host in a URL, or the whole of it when it does not look like one.
+fn host_of(url: &str) -> String {
+    url.split('/').nth(2).unwrap_or(url).to_string()
+}
+
+/// The part after the last `sep`, or the whole string when there is none.
+fn last_segment(text: &str, sep: char) -> String {
+    text.rsplit(sep).next().unwrap_or(text).to_string()
+}
+
+/// A command reduced to its program and first real argument: `cargo test`.
 fn command_gist(command: &str) -> String {
     let mut words = command.split_whitespace();
-    let program = words.next().unwrap_or("").rsplit('/').next().unwrap_or("");
+    let program = last_segment(words.next().unwrap_or(""), '/');
     match words.next() {
         Some(next) if !next.starts_with('-') => format!("{program} {next}"),
-        _ => program.to_string(),
+        _ => program,
     }
 }
 
@@ -263,6 +315,12 @@ fn truncate(text: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The shipped phrasing table, which is what the daemon runs with - so
+    /// these tests check the defaults people actually get.
+    fn verbs() -> Verbs {
+        crate::config::Sidebar::default().activity_verbs
+    }
     use std::io::Write;
 
     fn line(tool: &str, input: serde_json::Value) -> String {
@@ -287,27 +345,33 @@ mod tests {
     #[test]
     fn a_bash_call_shows_the_description_it_already_carries() {
         let input = serde_json::json!({ "command": "cargo test", "description": "Run the suite" });
-        assert_eq!(describe("Bash", &input).as_deref(), Some("Run the suite"));
+        assert_eq!(
+            describe("Bash", &input, &verbs()).as_deref(),
+            Some("Run the suite")
+        );
     }
 
     #[test]
     fn a_bash_call_without_a_description_falls_back_to_the_command() {
         let input = serde_json::json!({ "command": "/usr/bin/git commit -m wip" });
-        assert_eq!(describe("Bash", &input).as_deref(), Some("git commit"));
+        assert_eq!(
+            describe("Bash", &input, &verbs()).as_deref(),
+            Some("git commit")
+        );
         // A flag is not a useful second word.
         let input = serde_json::json!({ "command": "cargo --version" });
-        assert_eq!(describe("Bash", &input).as_deref(), Some("cargo"));
+        assert_eq!(describe("Bash", &input, &verbs()).as_deref(), Some("cargo"));
     }
 
     #[test]
     fn file_tools_name_the_file_not_its_path() {
         let input = serde_json::json!({ "file_path": "/home/daan/projects/x/src/label.rs" });
         assert_eq!(
-            describe("Read", &input).as_deref(),
+            describe("Read", &input, &verbs()).as_deref(),
             Some("Reading label.rs")
         );
         assert_eq!(
-            describe("Edit", &input).as_deref(),
+            describe("Edit", &input, &verbs()).as_deref(),
             Some("Editing label.rs")
         );
     }
@@ -318,9 +382,66 @@ mod tests {
         // must still produce a line.
         let input = serde_json::json!({ "mystery": 1 });
         assert_eq!(
-            describe("SomeNewTool", &input).as_deref(),
+            describe("SomeNewTool", &input, &verbs()).as_deref(),
             Some("SomeNewTool")
         );
+    }
+
+    #[test]
+    fn a_renamed_verb_changes_the_wording_and_nothing_else() {
+        let mut mine = verbs();
+        mine.insert("Read".to_string(), "Looking at {}".to_string());
+        let input = serde_json::json!({ "file_path": "src/label.rs" });
+        assert_eq!(
+            describe("Read", &input, &mine).as_deref(),
+            Some("Looking at label.rs")
+        );
+        // The subject is still the file's name, not its path - the table sets
+        // the words, the plugin still picks what they are about.
+        assert_eq!(
+            describe("Write", &input, &mine).as_deref(),
+            Some("Writing label.rs"),
+            "naming one tool must leave the others alone"
+        );
+    }
+
+    #[test]
+    fn a_template_without_a_placeholder_ignores_the_subject() {
+        let input = serde_json::json!({ "file_path": "src/label.rs", "pattern": "fn" });
+        assert_eq!(
+            describe("AskUserQuestion", &input, &verbs()).as_deref(),
+            Some("Asking you")
+        );
+    }
+
+    #[test]
+    fn an_emptied_template_falls_back_to_the_tools_name() {
+        // "" is how you opt a tool out of a phrasing without deleting the key
+        // that documents it.
+        let mut mine = verbs();
+        mine.insert("Grep".to_string(), String::new());
+        let input = serde_json::json!({ "pattern": "fn main" });
+        assert_eq!(describe("Grep", &input, &mine).as_deref(), Some("Grep"));
+    }
+
+    #[test]
+    fn a_tool_the_plugin_never_heard_of_can_still_be_given_words() {
+        // An MCP server's tool, or one newer than this plugin: the generic
+        // sweep finds the subject so a template is all it takes.
+        let mut mine = verbs();
+        mine.insert("mcp__db__query".to_string(), "Querying {}".to_string());
+        let input = serde_json::json!({ "description": "the orders table" });
+        assert_eq!(
+            describe("mcp__db__query", &input, &mine).as_deref(),
+            Some("Querying the orders table")
+        );
+    }
+
+    #[test]
+    fn a_placeholder_that_cannot_be_filled_leaves_the_tools_name() {
+        // A field that has moved under us must not blank the row.
+        let input = serde_json::json!({ "something_else": 1 });
+        assert_eq!(describe("Read", &input, &verbs()).as_deref(), Some("Read"));
     }
 
     #[test]
@@ -331,14 +452,14 @@ mod tests {
         ))
         .unwrap();
         value["isSidechain"] = serde_json::Value::Bool(true);
-        assert_eq!(activity_in(value.to_string().as_bytes()), None);
+        assert_eq!(activity_in(value.to_string().as_bytes(), &verbs()), None);
     }
 
     #[test]
     fn junk_lines_are_skipped_rather_than_fatal() {
-        assert_eq!(activity_in(b"not json at all"), None);
-        assert_eq!(activity_in(b""), None);
-        assert_eq!(activity_in(b"{}"), None);
+        assert_eq!(activity_in(b"not json at all", &verbs()), None);
+        assert_eq!(activity_in(b"", &verbs()), None);
+        assert_eq!(activity_in(b"{}", &verbs()), None);
     }
 
     #[test]
@@ -355,14 +476,14 @@ mod tests {
 
         let mut offset = 0u64;
         assert_eq!(
-            newest_activity(&path, &mut offset).as_deref(),
+            newest_activity(&path, &mut offset, &verbs()).as_deref(),
             Some("first")
         );
         let after_first = offset;
         assert!(after_first > 0, "offset must advance");
 
         // Nothing new: no re-read, and the offset stays put.
-        assert_eq!(newest_activity(&path, &mut offset), None);
+        assert_eq!(newest_activity(&path, &mut offset, &verbs()), None);
         assert_eq!(offset, after_first);
 
         // Append two more; only the newest is reported.
@@ -384,7 +505,7 @@ mod tests {
         .expect("write");
         file.flush().expect("flush");
         assert_eq!(
-            newest_activity(&path, &mut offset).as_deref(),
+            newest_activity(&path, &mut offset, &verbs()).as_deref(),
             Some("newest")
         );
 
@@ -406,7 +527,10 @@ mod tests {
         file.flush().expect("flush");
 
         let mut offset = 0u64;
-        assert_eq!(newest_activity(&path, &mut offset).as_deref(), Some("done"));
+        assert_eq!(
+            newest_activity(&path, &mut offset, &verbs()).as_deref(),
+            Some("done")
+        );
 
         // Finish the line: now it counts, and nothing was lost.
         let mut file = std::fs::OpenOptions::new()
@@ -422,7 +546,7 @@ mod tests {
         .expect("write");
         file.flush().expect("flush");
         assert_eq!(
-            newest_activity(&path, &mut offset).as_deref(),
+            newest_activity(&path, &mut offset, &verbs()).as_deref(),
             Some("after")
         );
 
@@ -446,7 +570,7 @@ mod tests {
         }
         file.flush().expect("flush");
         let mut offset = 0u64;
-        assert!(newest_activity(&path, &mut offset).is_some());
+        assert!(newest_activity(&path, &mut offset, &verbs()).is_some());
 
         // Truncate: a shorter file than last time was replaced, not appended.
         let mut file = File::create(&path).expect("truncate");
@@ -458,7 +582,7 @@ mod tests {
         .expect("write");
         file.flush().expect("flush");
         assert_eq!(
-            newest_activity(&path, &mut offset).as_deref(),
+            newest_activity(&path, &mut offset, &verbs()).as_deref(),
             Some("fresh")
         );
 
