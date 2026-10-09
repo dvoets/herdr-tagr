@@ -21,7 +21,7 @@ use std::path::Path;
 use crate::config::{Config, DefaultBranchStyle, GitPosition, GlyphPosition};
 use crate::detect::Detected;
 use crate::git::{Cache, Head};
-use crate::icons::Kind;
+use crate::icons::{App, Kind};
 
 pub struct Context<'a> {
     pub detected: &'a Detected,
@@ -36,9 +36,19 @@ pub struct Context<'a> {
 }
 
 impl Context<'_> {
-    /// The folder segment: the parent repository for a linked worktree,
-    /// otherwise the current directory's name.
+    /// The folder segment: the file the app has open if it publishes one, then
+    /// the parent repository for a linked worktree, otherwise the current
+    /// directory's name.
+    ///
+    /// The open file wins because it is what you are looking at; the directory
+    /// is only where it happens to live. Opt-in per app, since most apps
+    /// publish nothing worth reading here.
     fn folder(&self, cfg: &Config) -> Option<String> {
+        if self.detected.app.folder_from_title {
+            if let Some(file) = file_from_title(self.terminal_title, &self.detected.app) {
+                return Some(file);
+            }
+        }
         match self.worktree_repo {
             Some(repo) => Some(repo.to_string()),
             None => self.cwd.map(|c| folder_name(c, cfg)),
@@ -242,6 +252,54 @@ pub fn tokens(ctx: &Context<'_>, cfg: &Config, git: &mut Cache) -> Tokens {
     }
 }
 
+/// The file an app has open, read from the terminal title it publishes.
+///
+/// `None` whenever the title is not clearly a file name, so the caller falls
+/// back to the folder rather than putting a shell prompt in the label. That
+/// matters because the title is never blank: when an app has not been told to
+/// publish one - nvim's `'title'` is off by default - whatever the shell last
+/// wrote is still sitting there.
+fn file_from_title(title: Option<&str>, app: &App) -> Option<String> {
+    let title = title?.trim();
+
+    // A shell prompt. oh-my-zsh and friends publish `user@host:~/dir` between
+    // commands, which is the directory we would have shown anyway - and the
+    // remote half of it would be a lie on a local pane.
+    if title.contains('@') && title.contains(':') {
+        return None;
+    }
+
+    // nvim's default `titlestring` is `notes.txt (~/Downloads) - NVIM`, so peel
+    // the editor's name and the directory back off. `titlestring = '%t'` is
+    // already bare and passes through both of these untouched.
+    let head = title.split(" - ").next().unwrap_or(title);
+    let head = head.split(" (").next().unwrap_or(head).trim();
+
+    // `%f` and the like give a path rather than a name.
+    let name = head.rsplit(['/', '\\']).next().unwrap_or(head).trim();
+    if name.is_empty() {
+        return None;
+    }
+
+    // `[No Name]`, `[Scratch]`: a buffer with no file behind it, which is the
+    // folder's business again.
+    if name.starts_with('[') && name.ends_with(']') {
+        return None;
+    }
+
+    // The app's own name means it never published anything at all - that string
+    // is the shell announcing the command it is running.
+    let own_name = |text: &str| {
+        text.eq_ignore_ascii_case(&app.id)
+            || app.matches.iter().any(|m| text.eq_ignore_ascii_case(m))
+    };
+    if own_name(name) {
+        return None;
+    }
+
+    Some(name.to_string())
+}
+
 fn ssh_segment(host: &str, ctx: &Context<'_>, cfg: &Config) -> String {
     let remote = if cfg.ssh.remote_folder_from_title {
         ctx.terminal_title.and_then(|t| remote_folder(t, host, cfg))
@@ -330,6 +388,16 @@ mod tests {
             rank: 50,
             kind,
             matches: vec![],
+            folder_from_title: false,
+        }
+    }
+
+    /// The same, for an app that publishes the file it has open.
+    fn titled_app(id: &str, matches: &[&str]) -> App {
+        App {
+            matches: matches.iter().map(|m| m.to_string()).collect(),
+            folder_from_title: true,
+            ..app(id, "\u{e6ae}", Kind::Normal)
         }
     }
 
@@ -599,6 +667,127 @@ mod tests {
 
         cfg.git.branch_glyph_position = GlyphPosition::Off;
         assert_eq!(label_with(&repo, "api", &cfg), "I api (feat/auth)");
+    }
+
+    #[test]
+    fn an_open_file_replaces_the_folder() {
+        let cfg = Config::default();
+        let d = Detected {
+            app: titled_app("nvim", &["nvim", "neovim"]),
+            ssh_host: None,
+        };
+        let label = |title: Option<&str>| {
+            render(
+                &ctx(&d, Some("/home/daan/Downloads"), title),
+                &cfg,
+                &mut Cache::default(),
+            )
+        };
+
+        // titlestring = '%t': the bare name, which is the documented setting.
+        assert_eq!(label(Some("notes.txt")), "\u{e6ae} notes.txt");
+        // nvim's default titlestring, which carries the directory and the
+        // editor's name along with it.
+        assert_eq!(
+            label(Some("notes.txt (~/Downloads) - NVIM")),
+            "\u{e6ae} notes.txt"
+        );
+        // A path, from '%f' and friends.
+        assert_eq!(
+            label(Some("/home/daan/Downloads/notes.txt")),
+            "\u{e6ae} notes.txt"
+        );
+    }
+
+    #[test]
+    fn a_title_that_is_not_a_file_leaves_the_folder_alone() {
+        let cfg = Config::default();
+        let d = Detected {
+            app: titled_app("nvim", &["nvim", "neovim"]),
+            ssh_host: None,
+        };
+        let label = |title: Option<&str>| {
+            render(
+                &ctx(&d, Some("/home/daan/Downloads"), title),
+                &cfg,
+                &mut Cache::default(),
+            )
+        };
+        let folder = "\u{e6ae} Downloads";
+
+        // The shell's own title, which is what sits there until the app is
+        // told to publish one - this is the case that matters, because an
+        // editor's 'title' is off by default.
+        assert_eq!(label(Some("daan@host:~/Downloads")), folder);
+        // oh-my-zsh's preexec: the command it is running, not a file.
+        assert_eq!(label(Some("nvim")), folder);
+        assert_eq!(label(Some("NVIM")), folder, "and case does not rescue it");
+        // A buffer with no file behind it.
+        assert_eq!(label(Some("[No Name] (~/Downloads) - NVIM")), folder);
+        // Nothing published at all.
+        assert_eq!(label(None), folder);
+        assert_eq!(label(Some("   ")), folder);
+    }
+
+    #[test]
+    fn only_apps_that_opt_in_read_their_title() {
+        // Every shipped app has this off: a title nobody set still holds
+        // whatever the shell put there, so reading it by default would put a
+        // shell prompt in the tab.
+        let cfg = Config::default();
+        for app in icons::table(&cfg) {
+            assert!(
+                !app.folder_from_title,
+                "{} ships with folder_from_title on",
+                app.id
+            );
+        }
+
+        let d = Detected {
+            app: app("nvim", "\u{e6ae}", Kind::Normal),
+            ssh_host: None,
+        };
+        let out = render(
+            &ctx(&d, Some("/home/daan/Downloads"), Some("notes.txt")),
+            &cfg,
+            &mut Cache::default(),
+        );
+        assert_eq!(
+            out, "\u{e6ae} Downloads",
+            "the title is ignored until asked for"
+        );
+    }
+
+    #[test]
+    fn the_open_file_wins_over_a_worktree_name() {
+        let cfg = Config::default();
+        let d = Detected {
+            app: titled_app("nvim", &["nvim"]),
+            ssh_host: None,
+        };
+        let mut c = ctx(
+            &d,
+            Some("/home/daan/.herdr/worktrees/x/feat-y"),
+            Some("main.rs"),
+        );
+        c.worktree_repo = Some("herdr-tagr");
+        assert_eq!(
+            render(&c, &cfg, &mut Cache::default()),
+            "\u{e6ae} main.rs",
+            "the file you are looking at beats where it lives"
+        );
+    }
+
+    #[test]
+    fn the_flag_is_reachable_from_configuration() {
+        let cfg: Config =
+            toml::from_str("[apps.nvim]\nfolder_from_title = true\n").expect("parses");
+        let nvim = icons::table(&cfg)
+            .into_iter()
+            .find(|a| a.id == "nvim")
+            .expect("nvim ships");
+        assert!(nvim.folder_from_title);
+        assert_eq!(nvim.rank, 80, "and the rest of the app survives");
     }
 
     #[test]

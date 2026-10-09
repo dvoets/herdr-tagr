@@ -27,6 +27,15 @@ pub struct App {
     pub rank: i32,
     pub kind: Kind,
     pub matches: Vec<String>,
+    /// Take the folder segment from the pane's terminal title rather than its
+    /// working directory, for an app that puts the file it has open there.
+    ///
+    /// Off for every shipped app, including the editors, because an app only
+    /// publishes its title when it has been told to - nvim's `'title'` is off
+    /// by default - and the title would otherwise still hold whatever the
+    /// shell last put there. Opt in per app once the app is actually
+    /// publishing something worth reading.
+    pub folder_from_title: bool,
 }
 
 /// (id, icon, rank, kind, process names)
@@ -223,6 +232,7 @@ pub fn table(cfg: &Config) -> Vec<App> {
             rank: *rank,
             kind: *kind,
             matches: matches.iter().map(|m| m.to_string()).collect(),
+            folder_from_title: false,
         })
         .collect();
 
@@ -245,6 +255,9 @@ pub fn table(cfg: &Config) -> Vec<App> {
                 if let Some(matches) = &ov.matches {
                     apps[i].matches = matches.clone();
                 }
+                if let Some(from_title) = ov.folder_from_title {
+                    apps[i].folder_from_title = from_title;
+                }
             }
             // An id we do not ship: the user is teaching us a new app.
             None => extra.push(App {
@@ -253,6 +266,7 @@ pub fn table(cfg: &Config) -> Vec<App> {
                 rank: ov.rank.unwrap_or(50),
                 kind: Kind::Normal,
                 matches: ov.matches.clone().unwrap_or_else(|| vec![id.clone()]),
+                folder_from_title: ov.folder_from_title.unwrap_or(false),
             }),
         }
     }
@@ -271,5 +285,6 @@ pub fn fallback(apps: &[App]) -> App {
             rank: 0,
             kind: Kind::Shell,
             matches: Vec::new(),
+            folder_from_title: false,
         })
 }

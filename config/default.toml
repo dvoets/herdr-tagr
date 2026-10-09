@@ -363,6 +363,32 @@ adopt_new_tabs = true
 # icon = "\ue6ae"
 # matches = ["nvim", "neovim", "lvim"]
 
+# Name the tab after the file the app has open, instead of the folder it is
+# sitting in. The file comes from the pane's terminal title, so the app has to
+# be publishing one - which most are not, by default.
+#
+#   \uf120 Downloads       a shell in ~/Downloads
+#   \ue6ae notes.txt       nvim in ~/Downloads, editing notes.txt
+#
+# For nvim, two lines of its own config - 'title' ships off:
+#
+#   vim.o.title = true
+#   vim.o.titlestring = "%t"      -- just the name; %f for the path
+#
+# The label then follows the selected buffer, changing as you switch between
+# them. That is the point, and also the cost: a tab bar is a map you navigate
+# by position, and a label that rewrites itself is harder to learn. Try it
+# before leaving it on.
+#
+# Off for every shipped app, deliberately. A title nobody set is not blank - it
+# still holds whatever the shell last wrote there ("daan@host:~/Downloads", or
+# the name of the command being run), so reading it uninvited would put a shell
+# prompt in the tab. Titles that look like those, like a path with no file, or
+# like an empty buffer ("[No Name]") are refused and the folder is used instead.
+#
+# [apps.nvim]
+# folder_from_title = true
+
 # A new app the plugin does not ship. The id doubles as the process name
 # unless you give an explicit `matches` list.
 # [apps.psql]

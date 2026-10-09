@@ -147,6 +147,32 @@ glyph_separator = ""       # "herdr-tagr", not " herdr-tagr"
 folder_glyph = ""    # nf-fa-folder_open;  and  also exist
 ```
 
+## Name the tab after the open file
+
+In `~/Downloads` editing `notes.txt`, call the tab `notes.txt` instead of
+`Downloads`. Two lines in nvim, one key here.
+
+```lua
+-- in your nvim config; 'title' ships off, so nvim publishes nothing without it
+vim.o.title = true
+vim.o.titlestring = "%t"     -- just the name; %f for the path
+```
+
+```toml
+[apps.nvim]
+folder_from_title = true
+```
+
+The label then follows the **selected buffer**, so it changes as you switch
+between them - which is the point, and also the cost. A tab bar is a map you
+navigate by position; a label that rewrites itself is harder to learn than one
+that only changes when you move. Turn it off again with one key if it grates.
+
+Works for anything that publishes a filename as its title - `less` and `man`
+often do. It is off for every shipped app because a title nobody set still
+holds whatever the shell last wrote there; the
+[reference](configuration.md#folder_from_title) lists what gets refused.
+
 ## Which half of herdr you use
 
 ### Tabs only, no sidebar metadata

@@ -309,13 +309,61 @@ icon = ""
 rank = 55              # the id doubles as the process name
 ```
 
-`icon`, `rank` and `matches` are each optional; omitted ones keep the built-in
-value. An id the plugin does not ship is added as a new app, matching its own
+`icon`, `rank`, `matches` and `folder_from_title` are each optional; omitted
+ones keep the built-in value. An id the plugin does not ship is added as a new app, matching its own
 name unless you give `matches`.
 
 Built-in ranks: ssh 90, editors 76-80, yazi 75, lazygit/lazydocker 70, k9s 68,
 btop 66, ncdu 65, agents 60, pagers 48-50, tmux 45, dev tooling 20-30, shell 10.
 Anything unrecognised has no rank and can never win a pane.
+
+### `folder_from_title`
+
+Names the tab after the **file the app has open** rather than the folder it is
+sitting in:
+
+```
+ Downloads        a shell in ~/Downloads
+ notes.txt        nvim in ~/Downloads, editing notes.txt
+```
+
+The file is read from the pane's terminal title, so the app has to publish one.
+nvim's `'title'` ships **off**, so it needs two lines of its own:
+
+```lua
+vim.o.title = true
+vim.o.titlestring = "%t"    -- just the name; %f for the path
+```
+
+and then:
+
+```toml
+[apps.nvim]
+folder_from_title = true
+```
+
+nvim rewrites its title on every buffer switch, herdr emits `pane.updated` when
+a title changes, and the plugin is already subscribed - so the tab follows the
+selected buffer within a debounce of you switching. That is the point of it,
+and also the cost: a tab bar is a map you navigate by position, and a label
+that rewrites itself is harder to learn than one that only changes when you
+move. Worth trying before leaving on.
+
+**Off for every shipped app, deliberately.** A title nobody set is not blank:
+it still holds whatever the shell last wrote there. Reading it uninvited would
+put `daan@host:~/Downloads`, or the name of the running command, in the tab.
+Four shapes are refused outright, and fall back to the folder:
+
+| Title | Why it is refused |
+|---|---|
+| `daan@host:~/Downloads` | A shell prompt - an `@` and a `:` together |
+| `nvim`, `NVIM` | The app's own name, so the shell announcing the command it ran |
+| `[No Name] (~/Downloads) - NVIM` | A buffer with no file behind it |
+| empty or blank | Nothing published |
+
+`notes.txt (~/Downloads) - NVIM` - nvim's default `titlestring` - is understood
+rather than refused: the trailing editor name and the bracketed directory are
+peeled off. Setting `titlestring = "%t"` skips all of that.
 
 ## Jumping to the agents that want you
 

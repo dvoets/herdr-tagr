@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Name a tab after the file it has open
+
+`[apps.<id>] folder_from_title = true` takes the folder segment from the pane's
+terminal title instead of its working directory, for an app that publishes the
+file it has open there:
+
+```
+ Downloads        a shell in ~/Downloads
+ notes.txt        nvim in ~/Downloads, editing notes.txt
+```
+
+nvim needs `vim.o.title = true` and `vim.o.titlestring = "%t"` of its own -
+`'title'` ships off, which is why the title currently holds whatever the shell
+last wrote. The label then follows the selected buffer: nvim rewrites its title
+on a buffer switch, herdr emits `pane.updated` for it, and the plugin was
+already subscribed.
+
+Off for every shipped app, deliberately. A title nobody set is not blank, so
+reading it uninvited would put a shell prompt in the tab. Shell prompts, the
+app's own name, empty buffers and blank titles are all refused and fall back to
+the folder; nvim's default `titlestring` is understood rather than refused.
+
 ## 0.3.0
 
 Everything the sidebar does by hand is now a key you can set. **Nothing changes

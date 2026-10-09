@@ -388,6 +388,10 @@ pub struct AppOverride {
     /// Replaces the built-in process-name matches for this app.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matches: Option<Vec<String>>,
+    /// Take the folder segment from the pane's terminal title rather than its
+    /// working directory, for an app that puts the file it has open there.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder_from_title: Option<bool>,
 }
 
 impl Default for General {
